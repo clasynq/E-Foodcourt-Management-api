@@ -23,7 +23,7 @@ Before starting, initialize packages in each folder with these primary libraries
 
 ### A. Go Services (API Gateway, User, Wallet, Order, Seating)
 Run `go mod init <service-name>` in each service folder and install:
-* **Web Framework:** `github.com/gin-gonic/gin` or `github.com/gofiber/fiber/v2` (Fast HTTP routing).
+* **Web Framework:** `github.com/gin-gonic/gin` (Fast HTTP routing).
 * **Database Driver & ORM:** `github.com/jackc/pgx/v5` (Native Postgres driver) or `gorm.io/gorm` and `gorm.io/driver/postgres` (For schema queries).
 * **Token Auth:** `github.com/golang-jwt/jwt/v5` (For credentials/JWT generation & verification).
 * **Password Hashing:** `golang.org/x/crypto/bcrypt` (For password & pickup PIN hashing).
