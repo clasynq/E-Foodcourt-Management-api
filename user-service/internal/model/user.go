@@ -8,13 +8,13 @@ import (
 
 type User struct {
 	ID        string    `gorm:"type:uuid;default:gen_random_uuid();primaryKey" json:"id"`
-	Name      string    `gorm:"not null" json:"name"`
-	Username  string    `gorm:"uniqueIndex;not null" json:"username"`
-	Email     string    `gorm:"uniqueIndex;not null" json:"email"`
-	Phone     string    `gorm:"uniqueIndex;not null" json:"phone"` // <-- ADDED PHONE COLUMN
-	Password  string    `gorm:"not null" json:"-"`                 // Hidden from JSON responses
-	Role      string    `gorm:"default:CUSTOMER" json:"role"`
-	CardUID   *string   `gorm:"uniqueIndex" json:"card_uid,omitempty"`
+	Name      string    `gorm:"type:varchar(100);not null" json:"name"`
+	Username  string    `gorm:"type:varchar(50);uniqueIndex;not null" json:"username"`
+	Email     string    `gorm:"type:varchar(255);uniqueIndex;not null" json:"email"`
+	Phone     string    `gorm:"type:varchar(20);uniqueIndex;not null" json:"phone"`
+	Password  string    `gorm:"type:varchar(255);not null" json:"-"`
+	Role      string    `gorm:"type:varchar(20);default:CUSTOMER" json:"role"`
+	CardUID   *string   `gorm:"type:varchar(100);uniqueIndex" json:"card_uid,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
