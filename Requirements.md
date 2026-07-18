@@ -11,7 +11,8 @@ To develop, run, and test this microservices cluster locally, you will need the 
 * **Go (Golang):** Version `1.20` or higher (For Gateway, User, Wallet, Order, and Seating services).
 * **Python:** Version `3.10` or higher (For the AI Analytics service).
 * **PostgreSQL:** Version `14` or higher (Local database instance or running via Docker).
-* **Docker & Docker Compose:** (Optional but highly recommended) To easily run a multi-database PostgreSQL server locally.
+* **Redis:** Version `6` or higher (For fast session storage and recommendation caching).
+* **Docker & Docker Compose:** (Optional but highly recommended) To easily run PostgreSQL and Redis servers locally.
 * **Postman or Curl:** For API endpoint testing.
 
 ---
@@ -27,6 +28,7 @@ Run `go mod init <service-name>` in each service folder and install:
 * **Token Auth:** `github.com/golang-jwt/jwt/v5` (For credentials/JWT generation & verification).
 * **Password Hashing:** `golang.org/x/crypto/bcrypt` (For password & pickup PIN hashing).
 * **WebSockets:** `github.com/gorilla/websocket` (Required for the API Gateway to route notifications).
+* **Caching & Sessions (Redis):** `github.com/redis/go-redis/v9` (For connecting to Redis cache).
 * **Environment Variables:** `github.com/joho/godotenv` (For `.env` config files).
 
 ### B. AI Analytics Service (Python FastAPI)
@@ -34,6 +36,7 @@ Create a Python virtual environment and run `pip install`:
 * **FastAPI & Server:** `fastapi`, `uvicorn[standard]`
 * **Data Processing & ML:** `pandas`, `numpy`, `scikit-learn`
 * **HTTP Client:** `httpx` (To communicate back to Go core services)
+* **Caching (Redis client):** `redis` (For retrieving/caching predictions)
 * **Environment Configuration:** `python-dotenv`
 
 ---
@@ -52,7 +55,7 @@ Follow this phase-by-phase sequence to build and integrate the microservices:
 ### Phase 2: Authentication & User Service (`user-service`)
 1. Write routes for User Signup and Login (using Bcrypt password hashing).
 2. Generate JWT tokens containing user UUIDs and roles upon successful logins.
-3. Write active session endpoints to store token status in `user_sessions`.
+3. Write active session endpoints to store token status and blacklisted JWT tokens in Redis.
 4. Create NFC registration endpoints to pair a student ID (`card_uid`) to a specific `user_id`.
 
 ### Phase 3: API Gateway & WebSocket Router (`api-gateway`)
@@ -84,7 +87,7 @@ Follow this phase-by-phase sequence to build and integrate the microservices:
 ### Phase 7: AI Analytics Service (`ai-analytics-service`)
 1. Write a Python FastAPI server.
 2. Implement dummy endpoints representing forecasting logic (e.g., return average queue wait times based on historical queue depth values).
-3. Cache recommendation results into `recommendation_caches` for specific user IDs.
+3. Cache recommendation results into Redis for fast retrieval against specific user IDs.
 
 ### Phase 8: WebSocket Real-Time Integration
 1. Configure Order service to trigger an internal event webhook back to the API Gateway when an order state changes to `READY`.
