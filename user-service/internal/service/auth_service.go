@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log"
 	"os"
@@ -15,6 +16,18 @@ import (
 	"github.com/redis/go-redis/v9"
 	"golang.org/x/crypto/bcrypt"
 )
+
+// CachedUser represents internal user data stored in Redis (including hashed password)
+type CachedUser struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	Username  string    `json:"username"`
+	Email     string    `json:"email"`
+	Phone     string    `json:"phone"`
+	Password  string    `json:"password"`
+	Role      string    `json:"role"`
+	CreatedAt time.Time `json:"created_at"`
+}
 
 // AuthService outlines the sign-up and login logic requirements.
 type AuthService interface {
@@ -45,7 +58,7 @@ func NewAuthService(repo repository.UserRepository, rdb *redis.Client) AuthServi
 	return &authService{repo: repo, rdb: rdb}
 }
 
-// Register hashes password, sanitizes inputs, and creates a user record.
+// Register hashes password, sanitizes inputs, creates a user record, and caches in Redis.
 func (s *authService) Register(req model.SignupRequest) (*model.User, error) {
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
@@ -70,19 +83,35 @@ func (s *authService) Register(req model.SignupRequest) (*model.User, error) {
 		return nil, err
 	}
 
+	// Write-Through: Cache user in Redis immediately upon registration
+	s.cacheUserInRedis(user)
+
 	return user, nil
 }
 
-// Authenticate verifies password and issues a JWT token.
+// Authenticate verifies password and issues a JWT token (checking Redis cache first).
 func (s *authService) Authenticate(req model.LoginRequest) (string, *model.User, error) {
-	user, err := s.repo.FindByEmail(strings.ToLower(strings.TrimSpace(req.Email)))
-	if err != nil {
-		return "", nil, errors.New("invalid email")
+	email := strings.ToLower(strings.TrimSpace(req.Email))
+	var user *model.User
+
+	// 1. Read-Through: Check Redis Cache first to bypass PostgreSQL query
+	cachedUser, err := s.getUserFromRedis(email)
+	if err == nil && cachedUser != nil {
+		log.Println("[Cache HIT] User details retrieved from Redis for login:", email)
+		user = cachedUser
+	} else {
+		log.Println("[Cache MISS] Fetching user details from PostgreSQL database for login:", email)
+		user, err = s.repo.FindByEmail(email)
+		if err != nil {
+			return "", nil, errors.New("invalid email or password")
+		}
+		// Cache retrieved user in Redis for subsequent fast logins
+		s.cacheUserInRedis(user)
 	}
 
 	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password))
 	if err != nil {
-		return "", nil, errors.New("invalid password please forget it if you didn't remember")
+		return "", nil, errors.New("invalid email or password")
 	}
 
 	token, err := s.generateToken(user)
@@ -91,6 +120,67 @@ func (s *authService) Authenticate(req model.LoginRequest) (string, *model.User,
 	}
 
 	return token, user, nil
+}
+
+// Helper: Cache user details in Redis under user:email:<email> and user:id:<id>
+func (s *authService) cacheUserInRedis(user *model.User) {
+	ctx := context.Background()
+	cached := CachedUser{
+		ID:        user.ID,
+		Name:      user.Name,
+		Username:  user.Username,
+		Email:     user.Email,
+		Phone:     user.Phone,
+		Password:  user.Password,
+		Role:      user.Role,
+		CreatedAt: user.CreatedAt,
+	}
+
+	data, err := json.Marshal(cached)
+	if err != nil {
+		log.Printf("Warning: Failed to marshal user for Redis cache: %v", err)
+		return
+	}
+
+	emailKey := "user:email:" + strings.ToLower(user.Email)
+	idKey := "user:id:" + user.ID
+	ttl := 7 * 24 * time.Hour // Cache for 7 days
+
+	if err := s.rdb.Set(ctx, emailKey, data, ttl).Err(); err != nil {
+		log.Printf("Warning: Failed to cache user by email in Redis: %v", err)
+	}
+	if err := s.rdb.Set(ctx, idKey, data, ttl).Err(); err != nil {
+		log.Printf("Warning: Failed to cache user by ID in Redis: %v", err)
+	}
+}
+
+// Helper: Retrieve cached user details from Redis
+func (s *authService) getUserFromRedis(email string) (*model.User, error) {
+	ctx := context.Background()
+	key := "user:email:" + strings.ToLower(email)
+
+	val, err := s.rdb.Get(ctx, key).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	var cached CachedUser
+	if err := json.Unmarshal([]byte(val), &cached); err != nil {
+		return nil, err
+	}
+
+	user := &model.User{
+		ID:        cached.ID,
+		Name:      cached.Name,
+		Username:  cached.Username,
+		Email:     cached.Email,
+		Phone:     cached.Phone,
+		Password:  cached.Password,
+		Role:      cached.Role,
+		CreatedAt: cached.CreatedAt,
+	}
+
+	return user, nil
 }
 
 // generateToken cryptographically signs user claims to return a JWT string.
