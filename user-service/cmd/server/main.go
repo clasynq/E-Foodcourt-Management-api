@@ -26,10 +26,11 @@ func main() {
 
 	// 2. Initialize Database pool and run migrations
 	db := config.InitDB()
+	rdb := config.InitRedis()
 
 	// 3. Dependency Injection (Wiring layers together)
 	userRepo := repository.NewUserRepository(db)
-	authSvc := service.NewAuthService(userRepo)
+	authSvc := service.NewAuthService(userRepo, rdb)
 	authHandler := handler.NewAuthHandler(authSvc)
 
 	// 4. Initialize Gin Web Engine
@@ -40,6 +41,7 @@ func main() {
 	{
 		authRoutes.POST("/signup", authHandler.Signup)
 		authRoutes.POST("/login", authHandler.Login)
+		authRoutes.POST("/logout", authHandler.Logout)
 	}
 
 	// 6. Start the web server

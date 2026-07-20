@@ -82,3 +82,29 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		},
 	})
 }
+
+// Logout invalidates the client's current jwt token
+func (h *AuthHandler) Logout(c *gin.Context) {
+	authHeader := c.GetHeader("Authorization")
+	if authHeader == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Authorization header is required"})
+		return
+	}
+
+	// split token from the header
+	parts := strings.Split(authHeader, " ")
+	if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid Authorization header format."})
+		return
+	}
+	tokenString := parts[1]
+
+	// Add token to blacklist in Redis
+	err := h.svc.BlacklistToken(tokenString)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to log out: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Logout successful"})
+}
