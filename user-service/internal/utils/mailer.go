@@ -19,22 +19,23 @@ func SendOTPEmail(toEmail, otpCode string) error {
 		return fmt.Errorf("SMTP settings are incomplete in .env file")
 	}
 
-	if from == "" {
-		from = user
-	}
-
 	port := 587
 	if p, err := strconv.Atoi(portStr); err == nil && p > 0 {
 		port = p
 	}
 
-	// Setup SMTP Authentication
 	auth := smtp.PlainAuth("", user, pass, host)
+
+	senderAddress := user
+	replyToHeader := ""
+	if from != "" {
+		replyToHeader = fmt.Sprintf("Reply-To: %s\r\n", from)
+	}
 
 	// Construct Email Message (Headers + Body)
 	subject := "Subject: Smart Food Court - Your Sign-up Verification OTP\r\n"
 	contentType := "MIME-Version: 1.0\r\nContent-Type: text/html; charset=UTF-8\r\n"
-	fromHeader := fmt.Sprintf("From: Smart Food Court <%s>\r\n", from)
+	fromHeader := fmt.Sprintf("From: Smart Food Court <%s>\r\n", senderAddress)
 	toHeader := fmt.Sprintf("To: %s\r\n", toEmail)
 
 	body := fmt.Sprintf(`
@@ -54,8 +55,8 @@ func SendOTPEmail(toEmail, otpCode string) error {
 		</html>
 	`, otpCode)
 
-	msg := []byte(fromHeader + toHeader + subject + contentType + "\r\n" + body)
+	msg := []byte(fromHeader + toHeader + replyToHeader + subject + contentType + "\r\n" + body)
 	addr := fmt.Sprintf("%s:%d", host, port)
 
-	return smtp.SendMail(addr, auth, from, []string{toEmail}, msg)
+	return smtp.SendMail(addr, auth, senderAddress, []string{toEmail}, msg)
 }
