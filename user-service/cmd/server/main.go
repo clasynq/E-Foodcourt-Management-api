@@ -42,6 +42,8 @@ func main() {
 		authRoutes.POST("/signup", authHandler.Signup)
 		authRoutes.POST("/login", authHandler.Login)
 		authRoutes.POST("/logout", authHandler.Logout)
+		authRoutes.POST("/send-otp", authHandler.SendOTP)
+		authRoutes.POST("/verify-otp", authHandler.VerifyOTP)
 	}
 
 	// 6. Start the web server

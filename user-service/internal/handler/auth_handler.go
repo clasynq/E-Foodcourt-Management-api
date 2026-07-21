@@ -108,3 +108,39 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "Logout successful"})
 }
+
+// SendOTP triggres OTP generation
+func (h *AuthHandler) SendOTP(c *gin.Context) {
+	var req model.SendOTPRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := h.svc.SendOTP(req.Email); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to send OTP: " + err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"message": "OTP verification code sent successfully to " + req.Email,
+	})
+}
+
+// VerifyOTP validates the otp which is submitted by the user
+func (h *AuthHandler) VerifyOTP(c *gin.Context) {
+	var req model.VerifyOTPRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	valid, err := h.svc.VerifyOTP(req.Email, req.OTP)
+	if err != nil || !valid {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "OTP verified successfully",
+	})
+}

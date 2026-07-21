@@ -2,15 +2,19 @@ package service
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
+	"math/big"
 	"os"
 	"strings"
 	"time"
 
 	"user-service/internal/model"
 	"user-service/internal/repository"
+	"user-service/internal/utils"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/redis/go-redis/v9"
@@ -35,12 +39,15 @@ type AuthService interface {
 	Authenticate(req model.LoginRequest) (string, *model.User, error)
 	BlacklistToken(tokenString string) error
 	IsTokenBlacklisted(tokenString string) (bool, error)
+	SendOTP(email string) error
+	VerifyOTP(email string, otp string) (bool, error)
 }
 
 type authService struct {
 	repo repository.UserRepository
 	rdb  *redis.Client
 }
+
 
 // IsTokenBlacklisted checks if the token key exists in Redis.
 func (s *authService) IsTokenBlacklisted(tokenString string) (bool, error) {
@@ -233,4 +240,50 @@ func (s *authService) BlacklistToken(tokenString string) error {
 	ctx := context.Background()
 	key := "blacklist:" + tokenString
 	return s.rdb.Set(ctx, key, "true", ttl).Err()
+}
+
+// SendOtp generated a 6-digit numeric code, saves it to redis (5 min TTL), and sends via Mail
+func (s *authService) SendOTP(email string) error {
+	email = strings.ToLower(strings.TrimSpace(email))
+
+	// Generates cryptographically secre 6-digit random number
+	nBig, err := rand.Int(rand.Reader, big.NewInt(900000))
+	if err != nil {
+		return fmt.Errorf("failed to generate random otp")
+	}
+	otpCode := fmt.Sprintf("%06d", nBig.Int64()+100000)
+
+	// save the otp with the 5 minutes expiration time
+	ctx := context.Background()
+	key := "otp:email:" + email
+	err = s.rdb.Set(ctx, key, otpCode, 5*time.Minute).Err()
+	if err != nil {
+		return fmt.Errorf("failed to save the otp in the redis: %v", err)
+	}
+
+	// Dispatch the otp via SMTP
+	return utils.SendOTPEmail(email, otpCode)
+}
+
+func (s *authService) VerifyOTP(email string, otp string) (bool, error) {
+	email = strings.ToLower(strings.TrimSpace(email))
+	ctx := context.Background()
+	key := "otp:email:" + email
+
+	// Fetch stored otp from redis
+	storedOTP, err := s.rdb.Get(ctx, key).Result()
+	if err != nil {
+		if err == redis.Nil {
+			return false, errors.New("OTP has expired or as not requested")
+		}
+		return false, err
+	}
+	if storedOTP != otp {
+		return false, errors.New("Invalid OTP code")
+	}
+
+	// Deleted OTP key from Redis upon successfully veriication so it cannot be reused
+
+	s.rdb.Del(ctx, key)
+	return true, nil
 }
