@@ -26,10 +26,9 @@ func SendOTPEmail(toEmail, otpCode string) error {
 
 	auth := smtp.PlainAuth("", user, pass, host)
 
-	senderAddress := user
-	replyToHeader := ""
-	if from != "" {
-		replyToHeader = fmt.Sprintf("Reply-To: %s\r\n", from)
+	senderAddress := from
+	if senderAddress == "" {
+		senderAddress = user
 	}
 
 	// Construct Email Message (Headers + Body)
@@ -55,7 +54,7 @@ func SendOTPEmail(toEmail, otpCode string) error {
 		</html>
 	`, otpCode)
 
-	msg := []byte(fromHeader + toHeader + replyToHeader + subject + contentType + "\r\n" + body)
+	msg := []byte(fromHeader + toHeader + subject + contentType + "\r\n" + body)
 	addr := fmt.Sprintf("%s:%d", host, port)
 
 	return smtp.SendMail(addr, auth, senderAddress, []string{toEmail}, msg)
