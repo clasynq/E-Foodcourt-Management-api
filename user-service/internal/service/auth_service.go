@@ -261,8 +261,16 @@ func (s *authService) SendOTP(email string) error {
 		return fmt.Errorf("failed to save the otp in the redis: %v", err)
 	}
 
-	// Dispatch the otp via SMTP
-	return utils.SendOTPEmail(email, otpCode)
+	// Dispatch the OTP asynchronously in a background goroutine (Instant response!)
+	go func(recipient, code string) {
+		if err := utils.SendOTPEmail(recipient, code); err != nil {
+			log.Printf("Error: Failed to deliver background OTP email to %s: %v", recipient, err)
+		} else {
+			log.Printf("Success: Background OTP email delivered to %s", recipient)
+		}
+	}(email, otpCode)
+
+	return nil
 }
 
 func (s *authService) VerifyOTP(email string, otp string) (bool, error) {
