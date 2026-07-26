@@ -1,0 +1,15 @@
+# Ignore local binary
+main.exe
+user-service
+
+# Ignore configuration and local environment variables
+.env
+
+# Ignore git metadata
+.git
+.gitignore
+
+# Ignore build logs or temporary files
+*.log
+tmp/
+dist/

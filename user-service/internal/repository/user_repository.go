@@ -10,6 +10,7 @@ import (
 type UserRepository interface {
 	Create(user *model.User) error
 	FindByEmail(email string) (*model.User, error)
+	Update(use *model.User) error
 }
 
 type userRepository struct {
@@ -34,4 +35,9 @@ func (r *userRepository) FindByEmail(email string) (*model.User, error) {
 		return nil, err
 	}
 	return &user, nil
+}
+
+// Update an existing user record in the DB
+func (r *userRepository) Update(user *model.User) error {
+	return r.db.Save(user).Error
 }

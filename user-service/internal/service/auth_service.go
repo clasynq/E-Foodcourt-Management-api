@@ -41,13 +41,14 @@ type AuthService interface {
 	IsTokenBlacklisted(tokenString string) (bool, error)
 	SendOTP(email string) error
 	VerifyOTP(email string, otp string) (bool, error)
+	ForgotPassword(email string) error
+	ResetPassword(req model.ResetPasswordRequest) error
 }
 
 type authService struct {
 	repo repository.UserRepository
 	rdb  *redis.Client
 }
-
 
 // IsTokenBlacklisted checks if the token key exists in Redis.
 func (s *authService) IsTokenBlacklisted(tokenString string) (bool, error) {
@@ -294,4 +295,55 @@ func (s *authService) VerifyOTP(email string, otp string) (bool, error) {
 
 	s.rdb.Del(ctx, key)
 	return true, nil
+}
+
+func (s *authService) ForgotPassword(email string) error {
+	email = strings.ToLower(strings.TrimSpace(email))
+
+	// first veriy if the user exist in out database
+	_, err := s.repo.FindByEmail(email)
+	if err != nil {
+		return fmt.Errorf("user with this email does not exist")
+	}
+	return s.SendOTP(email)
+}
+
+// ResetPassword verifies the otp and updates the password in DB & invalidates Redis cache
+func (s *authService) ResetPassword(req model.ResetPasswordRequest) error {
+	email := strings.ToLower(strings.TrimSpace(req.Email))
+
+	// 1. Verify OTP
+	valid, err := s.VerifyOTP(email, req.OTP)
+	if err != nil {
+		return err
+	}
+	if !valid {
+		return errors.New("invalid OTP code")
+	}
+
+	// 2. Hash new password
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+
+	// 3. Find user in database
+	user, err := s.repo.FindByEmail(email)
+	if err != nil {
+		return err
+	}
+
+	// 4. Update password
+	user.Password = string(hashedPassword)
+	if err := s.repo.Update(user); err != nil {
+		return err
+	}
+
+	// 5. Invalidate user cache in Redis
+	ctx := context.Background()
+	emailKey := "user:email:" + email
+	idKey := "user:id:" + user.ID
+	s.rdb.Del(ctx, emailKey, idKey)
+
+	return nil
 }

@@ -44,6 +44,8 @@ func main() {
 		authRoutes.POST("/logout", authHandler.Logout)
 		authRoutes.POST("/send-otp", authHandler.SendOTP)
 		authRoutes.POST("/verify-otp", authHandler.VerifyOTP)
+		authRoutes.POST("/forgot-password", authHandler.ForgotPassword)
+		authRoutes.POST("/reset-password", authHandler.ResetPassword)
 	}
 
 	// 6. Start the web server
