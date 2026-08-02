@@ -24,7 +24,10 @@ var validServices = []string{
 	"ai-analytics-service",
 	"api-gateway",
 	"dining-iot-service",
+	"manager-dashboard",
 	"order-kitchen-service",
+	"staff-login",
+	"user-dashboard",
 	"user-service",
 	"wallet-service",
 }
@@ -69,6 +72,15 @@ func main() {
 		runFlushAll(dbURL)
 	case "createadmin":
 		runCreateAdmin(dbURL)
+	case "createstaff":
+		staffDbURL := ""
+		if err := godotenv.Load("staff-login/.env"); err == nil {
+			staffDbURL = os.Getenv("DB_DSN")
+		}
+		if staffDbURL == "" {
+			log.Fatal("Error: Could not read DB_DSN from staff-login/.env. Please ensure the file exists and is configured.")
+		}
+		runCreateStaff(staffDbURL)
 	case "updatepass":
 		runUpdatePass(dbURL)
 	case "updateemail":
@@ -92,6 +104,7 @@ func printHelp() {
 	fmt.Println("  makemigrations <service> <desc>      Generate a new SQL migration template for a specific service")
 	fmt.Println("  flushall                             Truncate all data tables (clears DB but keeps schemas)")
 	fmt.Println("  createadmin                          Create a new admin user in the users table")
+	fmt.Println("  createstaff                          Create a new staff member (MANAGER/CHEF/ADMIN) in staff table")
 	fmt.Println("  updatepass                           Update an admin password in the users table")
 	fmt.Println("  updateemail                          Update an admin email address in the users table")
 	fmt.Println("  help                                 Show this help screen")
@@ -633,4 +646,139 @@ func runGormAutoMigrate(dbURL string) {
 	// Stub: Dynamic GORM AutoMigrate is bypassed.
 	// You can define standard GORM model schemas here once your entities are built.
 	fmt.Println("[Migrate] GORM AutoMigrate is currently disabled (models pending design). Using SQL-based migrations.")
+}
+
+// ----------------------------------------------------
+// CREATESTAFF COMMAND (Using Bcrypt)
+// ----------------------------------------------------
+func runCreateStaff(dbURL string) {
+	fmt.Println(strings.Repeat("=", 60))
+	fmt.Println("  Smart Food Court Staff SQL Query Generator (Go - Bcrypt)")
+	fmt.Println(strings.Repeat("=", 60))
+
+	reader := bufio.NewReader(os.Stdin)
+
+	// Prompt for Name
+	fmt.Print("Enter Staff Name (e.g. Rahul Manager): ")
+	nameInput, err := reader.ReadString('\n')
+	if err != nil {
+		fmt.Printf("Error reading name: %v\n", err)
+		os.Exit(1)
+	}
+	name := strings.TrimSpace(nameInput)
+	if name == "" {
+		fmt.Println("Error: Name cannot be empty.")
+		os.Exit(1)
+	}
+
+	// Prompt for Email
+	fmt.Print("Enter Staff Email: ")
+	emailInput, err := reader.ReadString('\n')
+	if err != nil {
+		fmt.Printf("Error reading email: %v\n", err)
+		os.Exit(1)
+	}
+	email := strings.ToLower(strings.TrimSpace(emailInput))
+	if email == "" {
+		fmt.Println("Error: Email cannot be empty.")
+		os.Exit(1)
+	}
+
+	// Prompt for Phone
+	fmt.Print("Enter Staff Phone: ")
+	phoneInput, err := reader.ReadString('\n')
+	if err != nil {
+		fmt.Printf("Error reading phone: %v\n", err)
+		os.Exit(1)
+	}
+	phone := strings.TrimSpace(phoneInput)
+	if phone == "" {
+		fmt.Println("Error: Phone cannot be empty.")
+		os.Exit(1)
+	}
+
+	// Prompt for Role
+	fmt.Print("Enter Staff Role (MANAGER, CHEF, ADMIN): ")
+	roleInput, err := reader.ReadString('\n')
+	if err != nil {
+		fmt.Printf("Error reading role: %v\n", err)
+		os.Exit(1)
+	}
+	role := strings.ToUpper(strings.TrimSpace(roleInput))
+	if role != "MANAGER" && role != "CHEF" && role != "ADMIN" {
+		fmt.Println("Error: Invalid role. Must be MANAGER, CHEF, or ADMIN.")
+		os.Exit(1)
+	}
+
+	// Prompt for password
+	password, err := readPassword(reader, "Enter Staff Password: ")
+	if err != nil {
+		fmt.Printf("Error reading password: %v\n", err)
+		os.Exit(1)
+	}
+	if password == "" {
+		fmt.Println("Error: Password cannot be empty.")
+		os.Exit(1)
+	}
+
+	// Confirm password
+	confirmPassword, err := readPassword(reader, "Confirm Staff Password: ")
+	if err != nil {
+		fmt.Printf("Error reading confirmation: %v\n", err)
+		os.Exit(1)
+	}
+	if password != confirmPassword {
+		fmt.Println("Error: Passwords do not match.")
+		os.Exit(1)
+	}
+
+	// Generate Bcrypt hash
+	fmt.Println("\nHashing password using Bcrypt...")
+	hashedPassword, err := HashPassword(password)
+	if err != nil {
+		log.Fatalf("Failed to hash password: %v", err)
+	}
+
+	// Generate SQL Statement for staff_members table
+	sqlQuery := fmt.Sprintf(`INSERT INTO staff_members (id, name, email, phone, password, role, is_active, created_at)
+VALUES (
+    gen_random_uuid(),
+    '%s', 
+    '%s', 
+    '%s',
+    '%s', 
+    '%s', 
+    true,
+    NOW()
+);`, name, email, phone, hashedPassword, role)
+
+	fmt.Println("\n" + strings.Repeat("=", 60))
+	fmt.Println("  GENERATED SQL QUERY (Copy and run this in your database client)")
+	fmt.Println(strings.Repeat("=", 60))
+	fmt.Println(sqlQuery)
+	fmt.Println(strings.Repeat("=", 60))
+
+	filename := "create_staff.sql"
+	err = os.WriteFile(filename, []byte(sqlQuery), 0644)
+	if err != nil {
+		fmt.Printf("\nWarning: Could not save query to file: %v\n", err)
+	} else {
+		fmt.Printf("\nSaved query to file: %s\n", filename)
+	}
+
+	// Execute immediately if requested
+	fmt.Print("\nDo you want to execute this query on the database immediately? (y/N): ")
+	confirmInput, err := reader.ReadString('\n')
+	if err == nil {
+		confirm := strings.TrimSpace(strings.ToLower(confirmInput))
+		if confirm == "y" || confirm == "yes" {
+			fmt.Println("Connecting to database...")
+			db := connectDB(dbURL)
+			if err := db.Exec(sqlQuery).Error; err != nil {
+				fmt.Printf("Error executing query: %v\n", err)
+			} else {
+				fmt.Println("Success: Query executed and staff user created successfully!")
+			}
+		}
+	}
 }

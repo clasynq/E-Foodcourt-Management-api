@@ -83,21 +83,52 @@ Configured `.env` (git-ignored) and `.env.example` templates for all 6 microserv
 
 ---
 
-## 5. Postman Testing Verification
+## 5. Completed Work: Staff Login Service (`staff-login`)
+
+### Architecture & Data Models
+*   **Model ([staff.go](file:///d:/E-%20Food%20court/SERVER/staff-login/internal/model/staff.go))**:
+    *   `StaffMember` GORM table struct.
+    *   `InitiateLoginRequest` and `VerifyLoginRequest` (2FA verification flow validation schemas).
+*   **Repository ([staff_repository.go](file:///d:/E-%20Food%20court/SERVER/staff-login/internal/repository/staff_repository.go))**:
+    *   Data queries (`Create`, `FindByEmail`).
+*   **Database Seeding ([config.go](file:///d:/E-%20Food%20court/SERVER/staff-login/internal/config/config.go))**:
+    *   Automatically seeds three default demo accounts on startup:
+        *   Manager: `rahul@dinesynq.com` (password: `demo123`)
+        *   Chef: `ramesh@dinesynq.com` (password: `demo123`)
+        *   Admin: `admin@dinesynq.com` (password: `demo123`)
+
+### Business Logic & Redis Integration ([staff_service.go](file:///d:/E-%20Food%20court/SERVER/staff-login/internal/service/staff_service.go))
+1.  **InitiateLogin**: Validates credentials, generates secure 6-digit OTP, caches it in Redis (`staff:otp:<email>` with 5 min TTL), and logs/emails it.
+2.  **VerifyLogin**: Checks OTP, invalidates/deletes it, and signs JWT claims with `SECRECT_KEY`.
+3.  **BlacklistToken**: Invalidates staff JWT tokens inside Redis on logout.
+
+### Handlers & Entrypoint ([staff_handler.go](file:///d:/E-%20Food%20court/SERVER/staff-login/internal/handler/staff_handler.go) / [main.go](file:///d:/E-%20Food%20court/SERVER/staff-login/cmd/server/main.go))
+*   Exposed Port: `8086`
+*   Registered endpoints:
+    *   `POST /api/staff/login/initiate`
+    *   `POST /api/staff/login/verify`
+    *   `POST /api/staff/logout`
+
+---
+
+## 6. Postman Testing Verification
 *   ✅ **`POST /api/auth/signup`**: Persists user to PostgreSQL and caches in Redis.
 *   ✅ **`POST /api/auth/login`**: Issues JWT token; uses Redis cache first.
 *   ✅ **`POST /api/auth/logout`**: Adds current JWT to Redis blacklist.
 *   ✅ **`POST /api/auth/send-otp`** / **`verify-otp`**: Sends and validates temporary OTP codes.
 *   ✅ **`POST /api/auth/forgot-password`** / **`reset-password`**: Updates user passwords and resets user cache.
+*   ✅ **`POST /api/staff/login/initiate`**: Validates credentials and generates staff 2FA code.
+*   ✅ **`POST /api/staff/login/verify`**: Validates staff OTP and issues JWT containing roles (`MANAGER`/`CHEF`/`ADMIN`).
+*   ✅ **`POST /api/staff/logout`**: Blacklists staff JWT in Redis.
 
 ---
 
-## 6. Next Steps / Action Items for Next Session
+## 7. Next Steps / Action Items for Next Session
 *   **Phase 2: Add missing fields and profile CRUD to User Service**:
     1.  Add `student_id`, `department`, `avatar`, and `is_active` to the GORM `User` model.
     2.  Implement `GET /api/users/profile`, `PUT /api/users/profile`, `POST /api/users/rfid` (RFID card pairing), and `GET /api/users/by-card/:card_uid` endpoints.
 *   **Phase 3: API Gateway (`api-gateway`)**:
     1.  Initialize Go module and Gin framework on port `8080`.
-    2.  Implement HTTP reverse proxy to forward client requests on port `8080` to downstream microservice ports (`8081` for User, `8082` for Wallet, etc.).
+    2.  Implement HTTP reverse proxy to forward client requests on port `8080` to downstream microservice ports (`8081` for User, `8086` for Staff, `8082` for Wallet, etc.).
     3.  Create JWT validation middleware: Verify tokens, check against Redis blacklist, extract `UserID` & `Role`, and inject downstream headers (`X-User-Id`, `X-User-Role`).
 

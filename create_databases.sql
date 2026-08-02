@@ -5,3 +5,6 @@ CREATE DATABASE foodcourt_wallet;
 CREATE DATABASE foodcourt_order;
 CREATE DATABASE foodcourt_seating;
 CREATE DATABASE foodcourt_analytics;
+CREATE DATABASE foodcourt_staff;
+CREATE DATABASE foodcourt_manager;
+CREATE DATABASE foodcourt_user_dashboard;
