@@ -32,12 +32,10 @@ type LocalOrder struct {
 
 // StatsCard represents a widget block on the dashboard UI
 type StatsCard struct {
-	Title     string `json:"title"`
-	Value     string `json:"value"`
-	Change    string `json:"change"`
-	Icon      string `json:"icon"`
-	BgColor   string `json:"bgColor"`
-	TextColor string `json:"textColor"`
+	Title  string `json:"title"`
+	Value  string `json:"value"`
+	Change string `json:"change"`
+	Icon   string `json:"icon"` // E.g., "orders", "revenue", "prep_time", "users"
 }
 
 // LowInventoryAlert contains low stock formatting

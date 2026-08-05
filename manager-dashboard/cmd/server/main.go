@@ -16,9 +16,9 @@ import (
 
 func main() {
 	// Load environment config
-	if err := godotenv.Load("../../.env"); err != nil {
-		log.Println("Note: No .env configuration file found, using defaults")
-	}
+	_ = godotenv.Load(".env")
+	_ = godotenv.Load("../.env")
+	_ = godotenv.Load("../../.env")
 
 	config.InitDB()
 	config.InitRedis()

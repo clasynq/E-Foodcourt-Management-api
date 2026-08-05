@@ -1,6 +1,6 @@
 # Smart Food Court Management System - Progress Memory & Checkpoint
 
-**Last Updated:** 2026-07-27
+**Last Updated:** 2026-08-05
 **Developer:** Pair Programming Session (User + Antigravity)
 
 ---
@@ -23,6 +23,7 @@
         3. `foodcourt_order` (Order/Kitchen Service)
         4. `foodcourt_seating` (Dining IoT Service)
         5. `foodcourt_analytics` (AI Analytics Service)
+        6. `foodcourt_manager` (Manager Dashboard Service)
     *   **External Access Configured**:
         *   `listen_addresses = '*'` enabled in `postgresql.conf` (allowing Docker bridge network to connect).
         *   Recommended adding `host all all 0.0.0.0/0 scram-sha-256` in `pg_hba.conf` to allow non-local TCP connections from container subnets.
@@ -111,7 +112,37 @@ Configured `.env` (git-ignored) and `.env.example` templates for all 6 microserv
 
 ---
 
-## 6. Postman Testing Verification
+## 6. Completed Work: Manager Dashboard Service (`manager-dashboard`)
+*   **Port:** `8087`
+*   **Database:** `foodcourt_manager`
+*   **Architecture & Data Models ([dashboard.go](file:///d:/E-%20Food%20court/SERVER/manager-dashboard/internal/model/dashboard.go))**:
+    *   `InventoryItem` (tracks stock status `In Stock`, `Low Stock`, `Out of Stock`).
+    *   `LocalOrder` (simulates active and completed orders for dynamic aggregation).
+*   **Business Logic & Redis Integration ([dashboard_service.go](file:///d:/E-%20Food%20court/SERVER/manager-dashboard/internal/service/dashboard_service.go))**:
+    *   Aggregates today's vs yesterday's metrics (Total Orders, Total Revenue, Avg Prep Time) and calculates percentage differences.
+    *   Fetches active user session keys from Redis (`user:email:*`) for real-time active users widget.
+    *   Compiles custom multi-ingredient warnings for low stock items.
+*   **Handlers & Endpoint Routes ([dashboard_handler.go](file:///d:/E-%20Food%20court/SERVER/manager-dashboard/internal/handler/dashboard_handler.go) / [main.go](file:///d:/E-%20Food%20court/SERVER/manager-dashboard/cmd/server/main.go))**:
+    *   Exposes `GET /api/manager/overview` returning stats, pending orders queue, and stock alert models.
+    *   *Clean Code Refactoring:* Decoupled Tailwind CSS colors (`bg-blue-500/10` etc.) from API response schema. The backend returns semantic keys (`"orders"`, `"revenue"`, etc.), allowing the client to format styling rules.
+
+---
+
+## 7. Completed Work: Order & Kitchen Service (`order-kitchen-service` - Orders API)
+*   **Port:** `8084`
+*   **Database:** `foodcourt_order`
+*   **Architecture & Data Models ([order.go](file:///d:/E-%20Food%20court/SERVER/order-kitchen-service/internal/model/order.go))**:
+    *   `Order` GORM schema representing the database source of truth. Includes food item description text (`items`, e.g., `"Biryani, Soda"`), item count, and statuses.
+*   **Queries & Controllers ([order_repository.go](file:///d:/E-%20Food%20court/SERVER/order-kitchen-service/internal/repository/order_repository.go) / [order_handler.go](file:///d:/E-%20Food%20court/SERVER/order-kitchen-service/internal/handler/order_handler.go))**:
+    *   Retrieves active queue orders (status `PENDING`, `PREPARING`, `CONFIRMED`, `READY`), sorted by timestamp.
+    *   Updates status of order rows dynamically (so Chef updates instantly reflect in the Manager portal).
+*   **Handlers & Endpoint Routes ([main.go](file:///d:/E-%20Food%20court/SERVER/order-kitchen-service/cmd/server/main.go))**:
+    *   Exposes `GET /api/manager/orders` and `PUT /api/manager/orders/:id/status`.
+    *   Fully annotated with Go documentation comments.
+
+---
+
+## 8. Postman Testing Verification
 *   ✅ **`POST /api/auth/signup`**: Persists user to PostgreSQL and caches in Redis.
 *   ✅ **`POST /api/auth/login`**: Issues JWT token; uses Redis cache first.
 *   ✅ **`POST /api/auth/logout`**: Adds current JWT to Redis blacklist.
@@ -120,10 +151,13 @@ Configured `.env` (git-ignored) and `.env.example` templates for all 6 microserv
 *   ✅ **`POST /api/staff/login/initiate`**: Validates credentials and generates staff 2FA code.
 *   ✅ **`POST /api/staff/login/verify`**: Validates staff OTP and issues JWT containing roles (`MANAGER`/`CHEF`/`ADMIN`).
 *   ✅ **`POST /api/staff/logout`**: Blacklists staff JWT in Redis.
+*   ✅ **`GET /api/manager/overview`**: Returns stats, active orders, and stock alerts.
+*   ✅ **`GET /api/manager/orders`**: Retrieves live incoming/preparing order queue.
+*   ✅ **`PUT /api/manager/orders/:id/status`**: Updates status of a specific order row.
 
 ---
 
-## 7. Next Steps / Action Items for Next Session
+## 9. Next Steps / Action Items for Next Session
 *   **Phase 2: Add missing fields and profile CRUD to User Service**:
     1.  Add `student_id`, `department`, `avatar`, and `is_active` to the GORM `User` model.
     2.  Implement `GET /api/users/profile`, `PUT /api/users/profile`, `POST /api/users/rfid` (RFID card pairing), and `GET /api/users/by-card/:card_uid` endpoints.

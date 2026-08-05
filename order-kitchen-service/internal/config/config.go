@@ -3,7 +3,7 @@ package config
 import (
 	"context"
 	"log"
-	"manager-dashboard/internal/model"
+	"order-kitchen-service/internal/model"
 	"os"
 
 	"github.com/redis/go-redis/v9"
@@ -13,29 +13,38 @@ import (
 )
 
 var (
+	// DB stores the globally shared GORM PostgreSQL connection instance
 	DB  *gorm.DB
+	// RDB stores the globally shared Redis client session connection instance
 	RDB *redis.Client
 )
 
+// InitDB reads the PostgreSQL DSN config from env and establishes a connection pool.
+// It also runs auto-migrations to keep order schemas in sync.
 func InitDB() {
 	dsn := os.Getenv("DB_DSN")
 	if dsn == "" {
-		log.Fatal("DB_DSN variable id required")
+		log.Fatal("DB_DSN variable is required")
 	}
 	var err error
+	
+	// Establish database connection with GORM, defaulting logger level to Silent
 	DB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
 	})
 	if err != nil {
-		log.Fatalf("ailed to connect to database: %v", err)
+		log.Fatalf("Failed to connect to database: %v", err)
 	}
-	err = DB.AutoMigrate(&model.InventoryItem{}, &model.LocalOrder{})
+	
+	// AutoMigrate will dynamically create or update the orders tables
+	err = DB.AutoMigrate(&model.Order{})
 	if err != nil {
-		log.Fatalf("ailed to run migrations: %v", err)
+		log.Fatalf("Failed to run migrations: %v", err)
 	}
 }
 
-// Replace lines 38-57 with:
+// InitRedis parses the REDIS_URL environment config and opens a connection pool to Redis,
+// verifying the connectivity using a Ping pinging verification call.
 func InitRedis() {
 	redisURL := os.Getenv("REDIS_URL")
 	if redisURL == "" {
@@ -46,14 +55,13 @@ func InitRedis() {
 	if err != nil {
 		log.Fatalf("Failed to parse redis url: %v", err)
 	}
-
-	// FIX: Assign directly to the package-level RDB variable
+	
 	RDB = redis.NewClient(opts)
 
 	ctx := context.Background()
 	if err := RDB.Ping(ctx).Err(); err != nil {
 		log.Fatalf("Failed to connect to Redis: %v", err)
 	}
-
 	log.Println("Redis connection established successfully.")
 }
+
