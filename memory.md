@@ -125,19 +125,22 @@ Configured `.env` (git-ignored) and `.env.example` templates for all 6 microserv
 *   **Handlers & Endpoint Routes ([dashboard_handler.go](file:///d:/E-%20Food%20court/SERVER/manager-dashboard/internal/handler/dashboard_handler.go) / [main.go](file:///d:/E-%20Food%20court/SERVER/manager-dashboard/cmd/server/main.go))**:
     *   Exposes `GET /api/manager/overview` returning stats, pending orders queue, and stock alert models.
     *   *Clean Code Refactoring:* Decoupled Tailwind CSS colors (`bg-blue-500/10` etc.) from API response schema. The backend returns semantic keys (`"orders"`, `"revenue"`, etc.), allowing the client to format styling rules.
+    *   Exposes Inventory CRUD endpoints: `GET /api/manager/inventory`, `POST /api/manager/inventory`, `PUT /api/manager/inventory/:id`, `POST /api/manager/inventory/:id/restock`, `DELETE /api/manager/inventory/:id`.
 
 ---
 
-## 7. Completed Work: Order & Kitchen Service (`order-kitchen-service` - Orders API)
+## 7. Completed Work: Order & Kitchen Service (`order-kitchen-service`)
 *   **Port:** `8084`
 *   **Database:** `foodcourt_order`
 *   **Architecture & Data Models ([order.go](file:///d:/E-%20Food%20court/SERVER/order-kitchen-service/internal/model/order.go))**:
     *   `Order` GORM schema representing the database source of truth. Includes food item description text (`items`, e.g., `"Biryani, Soda"`), item count, and statuses.
+    *   `FoodCategory` and `FoodItem` models mapped for menu management.
 *   **Queries & Controllers ([order_repository.go](file:///d:/E-%20Food%20court/SERVER/order-kitchen-service/internal/repository/order_repository.go) / [order_handler.go](file:///d:/E-%20Food%20court/SERVER/order-kitchen-service/internal/handler/order_handler.go))**:
     *   Retrieves active queue orders (status `PENDING`, `PREPARING`, `CONFIRMED`, `READY`), sorted by timestamp.
     *   Updates status of order rows dynamically (so Chef updates instantly reflect in the Manager portal).
 *   **Handlers & Endpoint Routes ([main.go](file:///d:/E-%20Food%20court/SERVER/order-kitchen-service/cmd/server/main.go))**:
-    *   Exposes `GET /api/manager/orders` and `PUT /api/manager/orders/:id/status`.
+    *   Exposes Live Order Queue endpoints: `GET /api/manager/orders`, `PUT /api/manager/orders/:id/status`.
+    *   Exposes Menu CRUD endpoints: `GET /api/manager/menu`, `GET /api/manager/categories`, `POST /api/manager/menu`, `PUT /api/manager/menu/:id`, `DELETE /api/manager/menu/:id`, `PUT /api/manager/menu/:id/availability`, `PUT /api/manager/menu/:id/stock`.
     *   Fully annotated with Go documentation comments.
 
 ---
@@ -154,6 +157,16 @@ Configured `.env` (git-ignored) and `.env.example` templates for all 6 microserv
 *   ✅ **`GET /api/manager/overview`**: Returns stats, active orders, and stock alerts.
 *   ✅ **`GET /api/manager/orders`**: Retrieves live incoming/preparing order queue.
 *   ✅ **`PUT /api/manager/orders/:id/status`**: Updates status of a specific order row.
+*   ✅ **`GET /api/manager/menu`** / **`categories`**: Retrieves menu dishes and food categories.
+*   ✅ **`POST /api/manager/menu`**: Adds a new food item to the menu.
+*   ✅ **`PUT /api/manager/menu/:id`**: Updates food item details.
+*   ✅ **`DELETE /api/manager/menu/:id`**: Deletes a food item.
+*   ✅ **`PUT /api/manager/menu/:id/availability`** / **`stock`**: Toggles availability and updates item stock count.
+*   ✅ **`GET /api/manager/inventory`**: Retrieves kitchen raw inventory items.
+*   ✅ **`POST /api/manager/inventory`**: Adds a new raw kitchen ingredient.
+*   ✅ **`PUT /api/manager/inventory/:id`**: Updates details of an ingredient.
+*   ✅ **`POST /api/manager/inventory/:id/restock`**: Restocks ingredient quantity and logs notes.
+*   ✅ **`DELETE /api/manager/inventory/:id`**: Deletes an ingredient.
 
 ---
 
