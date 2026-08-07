@@ -29,6 +29,10 @@ func main() {
 	srv := service.NewOrderService(repo)
 	hdl := handler.NewOrderHandler(srv)
 
+	menuRepo := repository.NewMenuRepository(config.DB)
+	menuSrv := service.NewMenuService(menuRepo)
+	menuHdl := handler.NewMenuHandler(menuSrv)
+
 	// Create a default Gin HTTP router engine instance
 	r := gin.Default()
 
@@ -53,6 +57,15 @@ func main() {
 		{
 			manager.GET("/orders", hdl.GetActiveOrders)
 			manager.PUT("/orders/:id/status", hdl.UpdateOrderStatus)
+
+			// Menu Management CRUD Routes
+			manager.GET("/menu", menuHdl.ListFoodItems)
+			manager.GET("/categories", menuHdl.ListCategories)
+			manager.POST("/menu", menuHdl.CreateFoodItem)
+			manager.PUT("/menu/:id", menuHdl.UpdateFoodItem)
+			manager.DELETE("/menu/:id", menuHdl.DeleteFoodItem)
+			manager.PUT("/menu/:id/availability", menuHdl.ToggleAvailability)
+			manager.PUT("/menu/:id/stock", menuHdl.UpdateStock)
 		}
 	}
 

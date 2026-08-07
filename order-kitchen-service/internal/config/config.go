@@ -37,7 +37,7 @@ func InitDB() {
 	}
 	
 	// AutoMigrate will dynamically create or update the orders tables
-	err = DB.AutoMigrate(&model.Order{})
+	err = DB.AutoMigrate(&model.Order{}, &model.FoodCategory{}, &model.FoodItem{})
 	if err != nil {
 		log.Fatalf("Failed to run migrations: %v", err)
 	}
