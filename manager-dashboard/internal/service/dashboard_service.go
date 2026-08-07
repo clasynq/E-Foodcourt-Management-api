@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"manager-dashboard/internal/model"
 	"manager-dashboard/internal/repository"
@@ -175,4 +176,90 @@ func (s *DashboardService) formatCurrency(val float64) string {
 		return lastThree
 	}
 	return fmt.Sprintf("%s,%s", rest, lastThree)
+}
+
+// calculateStatus determines stock alert thresholds based on quantity
+func calculateStatus(current, min float64) string {
+	if current <= 0 {
+		return "Out of Stock"
+	}
+	if current <= min {
+		return "Low Stock"
+	}
+	return "In Stock"
+}
+
+func (s *DashboardService) ListInventoryItems(ctx context.Context) ([]model.InventoryItem, error) {
+	return s.repo.ListInventoryItems()
+}
+
+func (s *DashboardService) CreateInventoryItem(ctx context.Context, req model.InventoryItem) (*model.InventoryItem, error) {
+	id := fmt.Sprintf("ING-%d", time.Now().UnixNano()/1000000) // unique mills timestamp ID
+	status := calculateStatus(req.CurrentStock, req.MinStock)
+	
+	item := model.InventoryItem{
+		ID:            id,
+		Name:          req.Name,
+		Category:      req.Category,
+		CurrentStock:  req.CurrentStock,
+		MinStock:      req.MinStock,
+		MaxStock:      req.MaxStock,
+		Unit:          req.Unit,
+		Status:        status,
+		LastRestocked: time.Now(),
+		Notes:         req.Notes,
+	}
+
+	if err := s.repo.CreateInventoryItem(&item); err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+func (s *DashboardService) UpdateInventoryItem(ctx context.Context, id string, req model.InventoryItem) (*model.InventoryItem, error) {
+	status := calculateStatus(req.CurrentStock, req.MinStock)
+	updates := map[string]interface{}{
+		"name":          req.Name,
+		"category":      req.Category,
+		"current_stock": req.CurrentStock,
+		"min_stock":     req.MinStock,
+		"max_stock":     req.MaxStock,
+		"unit":          req.Unit,
+		"status":        status,
+		"notes":         req.Notes,
+	}
+
+	if err := s.repo.UpdateInventoryItem(id, updates); err != nil {
+		return nil, err
+	}
+	return s.repo.FindInventoryByID(id)
+}
+
+func (s *DashboardService) RestockInventoryItem(ctx context.Context, id string, amount float64, notes string) (*model.InventoryItem, error) {
+	item, err := s.repo.FindInventoryByID(id)
+	if err != nil {
+		return nil, err
+	}
+
+	newStock := item.CurrentStock + amount
+	if newStock > item.MaxStock {
+		newStock = item.MaxStock // Caps quantity to max stock limit
+	}
+	status := calculateStatus(newStock, item.MinStock)
+
+	updates := map[string]interface{}{
+		"current_stock":  newStock,
+		"status":         status,
+		"last_restocked": time.Now(),
+		"notes":          notes,
+	}
+
+	if err := s.repo.UpdateInventoryItem(id, updates); err != nil {
+		return nil, err
+	}
+	return s.repo.FindInventoryByID(id)
+}
+
+func (s *DashboardService) DeleteInventoryItem(ctx context.Context, id string) error {
+	return s.repo.DeleteInventoryItem(id)
 }

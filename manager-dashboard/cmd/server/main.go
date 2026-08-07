@@ -50,6 +50,13 @@ func main() {
 		manager := api.Group("/manager")
 		{
 			manager.GET("/overview", hdl.GetOverview)
+
+			// Inventory CRUD Routes
+			manager.GET("/inventory", hdl.ListInventoryItems)
+			manager.POST("/inventory", hdl.CreateInventoryItem)
+			manager.PUT("/inventory/:id", hdl.UpdateInventoryItem)
+			manager.POST("/inventory/:id/restock", hdl.RestockInventoryItem)
+			manager.DELETE("/inventory/:id", hdl.DeleteInventoryItem)
 		}
 	}
 

@@ -98,3 +98,35 @@ func (r *DashboardRepository) GetYesterdayStats() (int64, float64, float64, erro
 
 	return count, revenue, avgPrep, nil
 }
+
+// ListInventoryItems fetches all raw kitchen ingredients ordered by name ASC
+func (r *DashboardRepository) ListInventoryItems() ([]model.InventoryItem, error) {
+	var items []model.InventoryItem
+	err := r.db.Order("name asc").Find(&items).Error
+	return items, err
+}
+
+// FindInventoryByID retrieves an ingredient by its ID
+func (r *DashboardRepository) FindInventoryByID(id string) (*model.InventoryItem, error) {
+	var item model.InventoryItem
+	err := r.db.First(&item, "id = ?", id).Error
+	if err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+// CreateInventoryItem inserts a new inventory record
+func (r *DashboardRepository) CreateInventoryItem(item *model.InventoryItem) error {
+	return r.db.Create(item).Error
+}
+
+// UpdateInventoryItem updates specific fields of an ingredient
+func (r *DashboardRepository) UpdateInventoryItem(id string, updates map[string]interface{}) error {
+	return r.db.Model(&model.InventoryItem{}).Where("id = ?", id).Updates(updates).Error
+}
+
+// DeleteInventoryItem deletes an ingredient matching the ID
+func (r *DashboardRepository) DeleteInventoryItem(id string) error {
+	return r.db.Delete(&model.InventoryItem{}, "id = ?", id).Error
+}
