@@ -66,6 +66,9 @@ type FoodItem struct {
 	IsTodaysSpecial   bool      `gorm:"default:false" json:"isTodaysSpecial"`
 	IsBestSeller      bool      `gorm:"default:false" json:"isBestSeller"`
 	IsNewlyAdded      bool      `gorm:"default:true" json:"isNewlyAdded"`
+	IsLiveToday       bool      `gorm:"default:true" json:"isLiveToday"`
+	TargetStock       int       `gorm:"default:50" json:"targetStock"`
+	PlatesCooked      int       `gorm:"default:0" json:"platesCooked"`
 	StockCount        int       `gorm:"not null" json:"stockCount"`
 	MaxStock          int       `gorm:"not null" json:"maxStock"`
 	SoldCount         int       `gorm:"default:0" json:"soldCount"`
@@ -108,6 +111,9 @@ type FoodItemResponse struct {
 	IsTodaysSpecial bool          `json:"isTodaysSpecial"`
 	IsBestSeller    bool          `json:"isBestSeller"`
 	IsNewlyAdded    bool          `json:"isNewlyAdded"`
+	IsLiveToday     bool          `json:"isLiveToday"`
+	TargetStock     int           `json:"targetStock"`
+	PlatesCooked    int           `json:"platesCooked"`
 	StockCount      int           `json:"stockCount"`
 	MaxStock        int           `json:"maxStock"`
 	SoldCount       int           `json:"soldCount"`
@@ -159,6 +165,9 @@ func (f *FoodItem) ToResponse(categoryName string) FoodItemResponse {
 		IsTodaysSpecial: f.IsTodaysSpecial,
 		IsBestSeller:    f.IsBestSeller,
 		IsNewlyAdded:    f.IsNewlyAdded,
+		IsLiveToday:     f.IsLiveToday,
+		TargetStock:     f.TargetStock,
+		PlatesCooked:    f.PlatesCooked,
 		StockCount:      f.StockCount,
 		MaxStock:        f.MaxStock,
 		SoldCount:       f.SoldCount,
@@ -192,6 +201,9 @@ type CreateFoodItemRequest struct {
 	IsPopular         bool     `json:"isPopular"`
 	IsBestSeller      bool     `json:"isBestSeller"`
 	IsNewlyAdded      bool     `json:"isNewlyAdded"`
+	IsLiveToday       *bool    `json:"isLiveToday"`
+	TargetStock       *int     `json:"targetStock"`
+	PlatesCooked      *int     `json:"platesCooked"`
 	Ingredients       []string `json:"ingredients"`
 	Allergens         []string `json:"allergens"`
 	NutritionCalories int      `json:"nutritionCalories"`
@@ -207,4 +219,12 @@ type UpdateStockRequest struct {
 
 type UpdateAvailabilityRequest struct {
 	IsAvailable bool `json:"isAvailable"`
+}
+
+type CreateOrderRequest struct {
+	CustomerName string  `json:"customer" binding:"required"`
+	Items        string  `json:"items" binding:"required"`
+	ItemsCount   int     `json:"itemsCount" binding:"required,min=1"`
+	TotalAmount  float64 `json:"total" binding:"required,gt=0"`
+	Priority     string  `json:"priority"`
 }

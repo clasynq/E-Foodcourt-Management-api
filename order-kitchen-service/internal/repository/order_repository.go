@@ -2,6 +2,7 @@ package repository
 
 import (
 	"order-kitchen-service/internal/model"
+	"strings"
 
 	"gorm.io/gorm"
 )
@@ -30,5 +31,21 @@ func (r *OrderRepository) GetActiveOrders() ([]model.Order, error) {
 // UpdateOrderStatus updates the status string for a specific order identified by ID
 func (r *OrderRepository) UpdateOrderStatus(id string, status string) error {
 	return r.db.Model(&model.Order{}).Where("id = ?", id).Update("status", status).Error
+}
+
+// CreateOrder inserts a new order record into the database
+func (r *OrderRepository) CreateOrder(order *model.Order) error {
+	return r.db.Create(order).Error
+}
+
+// GetOrdersByCustomer queries orders placed by a specific customer (case-insensitive query)
+func (r *OrderRepository) GetOrdersByCustomer(customerName string) ([]model.Order, error) {
+	var orders []model.Order
+	query := r.db.Order("created_at desc")
+	if customerName != "" {
+		query = query.Where("LOWER(customer_name) = ?", strings.ToLower(customerName))
+	}
+	err := query.Find(&orders).Error
+	return orders, err
 }
 

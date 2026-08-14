@@ -60,8 +60,9 @@ func InitRedis() {
 
 	ctx := context.Background()
 	if err := RDB.Ping(ctx).Err(); err != nil {
-		log.Fatalf("Failed to connect to Redis: %v", err)
+		log.Printf("Warning: Failed to connect to Redis: %v. Continuing without Redis.", err)
+	} else {
+		log.Println("Redis connection established successfully.")
 	}
-	log.Println("Redis connection established successfully.")
 }
 

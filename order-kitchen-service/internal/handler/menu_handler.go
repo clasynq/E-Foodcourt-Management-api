@@ -123,3 +123,63 @@ func (h *MenuHandler) DeleteFoodItem(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Menu item deleted successfully"})
 }
+
+// UpdatePrep processes PUT /api/manager/menu/:id/prep
+func (h *MenuHandler) UpdatePrep(c *gin.Context) {
+	id := c.Param("id")
+	var req struct {
+		PlatesCooked *int `json:"platesCooked"`
+		TargetStock  *int `json:"targetStock"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	updates := make(map[string]interface{})
+	if req.PlatesCooked != nil {
+		updates["plates_cooked"] = *req.PlatesCooked
+	}
+	if req.TargetStock != nil {
+		updates["target_stock"] = *req.TargetStock
+	}
+
+	ctx := c.Request.Context()
+	err := h.srv.UpdatePrep(ctx, id, updates)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update prep status", "details": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Preparation status updated successfully"})
+}
+
+// ToggleLiveToday processes PUT /api/manager/menu/:id/live
+func (h *MenuHandler) ToggleLiveToday(c *gin.Context) {
+	id := c.Param("id")
+	var req struct {
+		IsLiveToday *bool `json:"isLiveToday" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx := c.Request.Context()
+	err := h.srv.ToggleLiveToday(ctx, id, *req.IsLiveToday)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to toggle live today status", "details": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Live status toggled successfully"})
+}
+
+// ListStudentFoodItems processes GET /api/student/menu
+func (h *MenuHandler) ListStudentFoodItems(c *gin.Context) {
+	ctx := c.Request.Context()
+	items, err := h.srv.ListStudentFoodItems(ctx)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch student menu items", "details": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, items)
+}

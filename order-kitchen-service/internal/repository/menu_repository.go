@@ -54,3 +54,10 @@ func (r *MenuRepository) UpdateFoodItem(id string, updates map[string]interface{
 func (r *MenuRepository) DeleteFoodItem(id string) error {
 	return r.db.Delete(&model.FoodItem{}, "id = ?", id).Error
 }
+
+// ListStudentFoodItems fetches all food items that are available and live today
+func (r *MenuRepository) ListStudentFoodItems() ([]model.FoodItem, error) {
+	var items []model.FoodItem
+	err := r.db.Where("is_available = ? AND is_live_today = ?", true, true).Order("created_at desc").Find(&items).Error
+	return items, err
+}

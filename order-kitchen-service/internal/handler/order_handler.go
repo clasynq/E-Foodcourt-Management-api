@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"order-kitchen-service/internal/model"
 	"order-kitchen-service/internal/service"
 
 	"github.com/gin-gonic/gin"
@@ -60,5 +61,35 @@ func (h *OrderHandler) UpdateOrderStatus(c *gin.Context) {
 		"id":      id,
 		"status":  req.Status,
 	})
+}
+
+// CreateOrder processes POST /api/student/orders
+func (h *OrderHandler) CreateOrder(c *gin.Context) {
+	var req model.CreateOrderRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx := c.Request.Context()
+	order, err := h.srv.CreateOrder(ctx, req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create order", "details": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, order)
+}
+
+// GetStudentOrders processes GET /api/student/orders
+func (h *OrderHandler) GetStudentOrders(c *gin.Context) {
+	customerName := c.Query("customer")
+	ctx := c.Request.Context()
+	orders, err := h.srv.GetOrdersByCustomer(ctx, customerName)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch student orders", "details": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, orders)
 }
 

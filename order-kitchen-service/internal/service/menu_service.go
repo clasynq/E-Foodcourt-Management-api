@@ -55,6 +55,21 @@ func (s *MenuService) ListFoodItems(ctx context.Context) ([]model.FoodItemRespon
 func (s *MenuService) CreateFoodItem(ctx context.Context, req model.CreateFoodItemRequest) (*model.FoodItemResponse, error) {
 	foodID := fmt.Sprintf("food-%d", time.Now().UnixNano())
 
+	isLiveToday := true
+	if req.IsLiveToday != nil {
+		isLiveToday = *req.IsLiveToday
+	}
+	targetStock := req.MaxStock
+	if req.TargetStock != nil {
+		targetStock = *req.TargetStock
+	} else if targetStock == 0 {
+		targetStock = 50
+	}
+	platesCooked := 0
+	if req.PlatesCooked != nil {
+		platesCooked = *req.PlatesCooked
+	}
+
 	item := model.FoodItem{
 		ID:                foodID,
 		Name:              req.Name,
@@ -73,6 +88,9 @@ func (s *MenuService) CreateFoodItem(ctx context.Context, req model.CreateFoodIt
 		IsPopular:         req.IsPopular,
 		IsBestSeller:      req.IsBestSeller,
 		IsNewlyAdded:      req.IsNewlyAdded,
+		IsLiveToday:       isLiveToday,
+		TargetStock:       targetStock,
+		PlatesCooked:      platesCooked,
 		Ingredients:       strings.Join(req.Ingredients, ","),
 		Allergens:         strings.Join(req.Allergens, ","),
 		NutritionCalories: req.NutritionCalories,
@@ -128,6 +146,16 @@ func (s *MenuService) UpdateFoodItem(ctx context.Context, id string, req model.C
 		"nutrition_fiber":    req.NutritionFiber,
 	}
 
+	if req.IsLiveToday != nil {
+		updates["is_live_today"] = *req.IsLiveToday
+	}
+	if req.TargetStock != nil {
+		updates["target_stock"] = *req.TargetStock
+	}
+	if req.PlatesCooked != nil {
+		updates["plates_cooked"] = *req.PlatesCooked
+	}
+
 	if err := s.repo.UpdateFoodItem(id, updates); err != nil {
 		return nil, err
 	}
@@ -181,4 +209,70 @@ func (s *MenuService) ToggleAvailability(ctx context.Context, id string, isAvail
 // DeleteFoodItem deletes a food record
 func (s *MenuService) DeleteFoodItem(ctx context.Context, id string) error {
 	return s.repo.DeleteFoodItem(id)
+}
+
+// UpdatePrep updates the plates cooked and target stock of a menu item, auto-adjusting stock and availability
+func (s *MenuService) UpdatePrep(ctx context.Context, id string, updates map[string]interface{}) error {
+	// If plates_cooked is updated, let's adjust stock_count and is_available just like the store does!
+	if cookedVal, ok := updates["plates_cooked"].(int); ok {
+		item, err := s.repo.FindFoodByID(id)
+		if err == nil {
+			target := item.TargetStock
+			if tVal, ok2 := updates["target_stock"].(int); ok2 {
+				target = tVal
+			}
+			if target <= 0 {
+				target = 9999
+			}
+			cooked := cookedVal
+			if cooked > target {
+				cooked = target
+			}
+			if cooked < 0 {
+				cooked = 0
+			}
+			updates["plates_cooked"] = cooked
+
+			diff := cooked - item.PlatesCooked
+			newStock := item.StockCount + diff
+			if newStock < 0 {
+				newStock = 0
+			}
+			updates["stock_count"] = newStock
+			updates["is_available"] = newStock > 0 && cooked < target
+		}
+	}
+	return s.repo.UpdateFoodItem(id, updates)
+}
+
+// ToggleLiveToday toggles the live status of a menu item
+func (s *MenuService) ToggleLiveToday(ctx context.Context, id string, isLiveToday bool) error {
+	updates := map[string]interface{}{
+		"is_live_today": isLiveToday,
+	}
+	return s.repo.UpdateFoodItem(id, updates)
+}
+
+// ListStudentFoodItems fetches available and live menu items mapped as response DTOs
+func (s *MenuService) ListStudentFoodItems(ctx context.Context) ([]model.FoodItemResponse, error) {
+	items, err := s.repo.ListStudentFoodItems()
+	if err != nil {
+		return nil, err
+	}
+
+	categories, _ := s.repo.ListCategories()
+	catMap := make(map[string]string)
+	for _, c := range categories {
+		catMap[c.ID] = c.Name
+	}
+
+	var resp []model.FoodItemResponse
+	for _, item := range items {
+		catName := "Uncategorized"
+		if name, ok := catMap[item.CategoryID]; ok {
+			catName = name
+		}
+		resp = append(resp, item.ToResponse(catName))
+	}
+	return resp, nil
 }

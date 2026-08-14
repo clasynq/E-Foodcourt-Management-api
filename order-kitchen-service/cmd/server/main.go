@@ -66,6 +66,14 @@ func main() {
 			manager.DELETE("/menu/:id", menuHdl.DeleteFoodItem)
 			manager.PUT("/menu/:id/availability", menuHdl.ToggleAvailability)
 			manager.PUT("/menu/:id/stock", menuHdl.UpdateStock)
+			manager.PUT("/menu/:id/prep", menuHdl.UpdatePrep)
+			manager.PUT("/menu/:id/live", menuHdl.ToggleLiveToday)
+		}
+		student := api.Group("/student")
+		{
+			student.GET("/menu", menuHdl.ListStudentFoodItems)
+			student.POST("/orders", hdl.CreateOrder)
+			student.GET("/orders", hdl.GetStudentOrders)
 		}
 	}
 
