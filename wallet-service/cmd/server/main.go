@@ -14,10 +14,10 @@ import (
 )
 
 func main() {
-	// Load environment variables
-	_ = godotenv.Load(".env")
-	_ = godotenv.Load("../.env")
-	_ = godotenv.Load("../../.env")
+	// Load environment variables (forcing override of global vars)
+	_ = godotenv.Overload(".env")
+	_ = godotenv.Overload("../.env")
+	_ = godotenv.Overload("../../.env")
 
 	// Initialize config
 	config.InitDB()
@@ -55,7 +55,9 @@ func main() {
 
 		api.POST("/recharge/nfc", hdl.NfcRecharge)
 		api.POST("/recharge/manual", hdl.ManualRecharge)
+		api.POST("/recharge/online", hdl.OnlineRecharge)
 		api.POST("/deduct", hdl.DeductBalance)
+		api.POST("/webhook/razorpay", hdl.RazorpayWebhook)
 	}
 
 	port := os.Getenv("PORT")

@@ -34,6 +34,16 @@ func ReverseProxyHandler(targetURL string) gin.HandlerFunc {
 		_, _ = w.Write([]byte(`{"error": "Bad Gateway", "message": "Downstream microservice is currently unreachable or starting up."}`))
 	}
 
+	// Clean up duplicate CORS headers returned from downstream microservices
+	proxy.ModifyResponse = func(resp *http.Response) error {
+		resp.Header.Del("Access-Control-Allow-Origin")
+		resp.Header.Del("Access-Control-Allow-Credentials")
+		resp.Header.Del("Access-Control-Allow-Headers")
+		resp.Header.Del("Access-Control-Allow-Methods")
+		resp.Header.Del("Access-Control-Expose-Headers")
+		return nil
+	}
+
 	return func(c *gin.Context) {
 		proxy.ServeHTTP(c.Writer, c.Request)
 	}

@@ -1,6 +1,6 @@
 # Smart Food Court Management System - Progress Memory & Checkpoint
 
-**Last Updated:** 2026-08-14
+**Last Updated:** 2026-08-17
 **Developer:** Pair Programming Session (User + Antigravity)
 
 ---
@@ -24,6 +24,7 @@
         5. `foodcourt_analytics` (AI Analytics Service)
         6. `foodcourt_manager` (Manager Dashboard Service)
         7. `foodcourt_user_dashboard` (User Dashboard Service)
+        8. `foodcourt_staff` (Staff Login Service)
 *   **Redis Cache**:
     *   Running on default port **`6379`**.
     *   Shared across microservices for:
@@ -40,7 +41,12 @@ Configured ports, PostgreSQL database connection DSNs, and Redis endpoints for a
 *   `dining-iot-service` (Port `8083`)
 *   `order-kitchen-service` (Port `8084`)
 *   `ai-analytics-service` (Port `8085`)
+*   `staff-login` (Port `8086`)
+*   `manager-dashboard` (Port `8087`)
 *   `user-dashboard` (Port `8088`)
+
+> [!IMPORTANT]
+> **Environment Overrides Fixed**: Updated all 7 microservices' entry points (`main.go`) to use `godotenv.Overload()` instead of `godotenv.Load()`. This isolates service configurations and prevents global system-wide environment variables from hijacking database connections.
 
 ---
 
@@ -58,7 +64,9 @@ Configured ports, PostgreSQL database connection DSNs, and Redis endpoints for a
 
 ## 5. Completed Work: Staff Login Service (`staff-login`)
 *   **Port:** `8086`
-*   **Features:** Multi-role staff 2FA authentication (Manager, Chef, Admin) with Redis OTP validation.
+*   **Direct Authentication Setup**: Removed the OTP verification requirement for staff logins. Staff members (MANAGER, CHEF, ADMIN) now authenticate directly via Bcrypt and receive JWT tokens immediately.
+*   **Endpoints:**
+    *   `POST /api/staff/login` (Direct password-based authorization whitelisted in Gateway middleware)
 
 ---
 
@@ -71,6 +79,7 @@ Configured ports, PostgreSQL database connection DSNs, and Redis endpoints for a
 ## 7. Completed Work: Order & Kitchen Service (`order-kitchen-service`)
 *   **Port:** `8084`
 *   **Features:** Live order status queue management, chef menu updates, category/dishes management.
+*   **Static Asset Serving**: Serves saved files statically at `/api/manager/uploads/` from the local server disk directory `./uploads/`.
 
 ---
 
@@ -91,10 +100,9 @@ Configured ports, PostgreSQL database connection DSNs, and Redis endpoints for a
 ## 9. Completed Work: Wallet Service (`wallet-service`)
 *   **Port:** `8082`
 *   **Database:** `foodcourt_wallet`
-*   **Features:**
-    *   Manages student digital credits and physical RFID card balances.
-    *   Processes cashier manual recharges and card tap NFC recharges.
-    *   Handles checkout balance deductions.
+*   **Razorpay Integration**:
+    *   Implemented `POST /api/wallet/recharge/online` endpoint to handle Razorpay payment payloads.
+    *   Configured the client wallet page (`src/app/student/wallet/page.tsx`) to pull whitelisted API credentials from `.env.local` and load the overlay checkout overlay window dynamically.
 *   **Endpoints:**
     *   `GET /api/wallet/balance` (Query by User ID / Email)
     *   `GET /api/wallet/student` (RFID / search string query)
@@ -102,6 +110,7 @@ Configured ports, PostgreSQL database connection DSNs, and Redis endpoints for a
     *   `GET /api/wallet/summary` (Stats on daily cashier intakes)
     *   `POST /api/wallet/recharge/nfc`
     *   `POST /api/wallet/recharge/manual`
+    *   `POST /api/wallet/recharge/online` (Razorpay)
     *   `POST /api/wallet/deduct` (Safe balance subtraction check)
 
 ---
@@ -109,7 +118,8 @@ Configured ports, PostgreSQL database connection DSNs, and Redis endpoints for a
 ## 10. Completed Work: API Gateway (`api-gateway`)
 *   **Port:** `8080`
 *   **Features:**
-    *   Single-port client interface. Uses dynamic prefix routing (`/api/*any`) to resolve downstream paths without Gin route panics.
+    *   Single-port client interface. Uses dynamic prefix routing (`/api/*any`) to resolve downstream paths without Gin route panics. Whitelists public staff login endpoints from JWT authorization checks.
+    *   **Specific Downstream Overlap Checks**: Whitelists and routes `/api/manager/orders`, `/api/manager/menu`, `/api/manager/categories`, and `/api/manager/uploads` to the `order-kitchen-service` (port `8084`) and general metrics/inventory to `manager-dashboard` (port `8087`).
     *   **CORS Support**: Permissive headers configuration to allow client web app integrations.
     *   **JWT Validation**: Checks bearer tokens against a common JWT secret key.
     *   **Blacklist Check**: Queries Redis to deny access to tokens stored during logout.
@@ -117,11 +127,13 @@ Configured ports, PostgreSQL database connection DSNs, and Redis endpoints for a
 
 ---
 
-## 11. Testing & Verification Summary
-*   ✅ **Auth Signup/Login** routed through gateway successfully.
-*   ✅ **Token Validations & Blacklist Checks** block invalid tokens or allow legitimate traffic.
-*   ✅ **Wallet Balance check & Recharges (NFC/Manual)** successfully update databases and reflect in logs.
-*   ✅ **Dashboard Overview aggregation** pulls combined stats from downstream services with full error tolerance.
+## 11. Manager Portal Integration Summary
+*   ✅ **Dashboard Cards & Overview**: Integrated `src/app/manager/page.tsx` with `/api/manager/overview` to render live today's stats, low-stock alerts, and pending orders. Wiped stale mock pending orders from `local_orders` GORM tables for a clean slate.
+*   ✅ **Live Orders Panel**: Connected `src/app/manager/orders/page.tsx` to read dynamic queues (`Preparing in Kitchen`, `Ready to Deliver`, `Dispatched History`) from the database, updated with a 10s auto-refresh interval.
+*   ✅ **Menu Management Control**: Integrated the `useFoodStore` Zustand store (`src/stores/food-store.ts`) and dialogs in `src/app/manager/menu/page.tsx` to perform real-time database CRUD operations.
+*   ✅ **Base Categories Seeding**: Configured categories seeding (`cat-1` to `cat-8`) to populate category select dropdowns while keeping menu items clean of mock items.
+*   ✅ **Base64 Local Image Saver**: Added Base64 string decoding inside `CreateFoodItem` and `UpdateFoodItem` services, writing physical files to `SERVER/order-kitchen-service/uploads/` on disk, returning static server URLs.
+*   ✅ **Zustand Storage Quota Fixed**: Disabled local storage `persist` middleware on `useFoodStore` to resolve browser `QuotaExceededError` limits caused by large Base64 images.
 
 ---
 
@@ -131,5 +143,3 @@ Configured ports, PostgreSQL database connection DSNs, and Redis endpoints for a
     *   Map gateway routing for `/api/dining/*`.
 *   **Phase 5: AI Analytics Service (`ai-analytics-service` - Port `8085`)**:
     *   Set up AI menus recommendations and prediction services.
-*   **Phase 6: Frontend Integration**:
-    *   Connect the React/Next.js store endpoints to query port `8080` instead of local mock services.

@@ -23,6 +23,7 @@ import (
 type StaffService interface {
 	InitiateLogin(req model.InitiateLoginRequest) error
 	VerifyLogin(req model.VerifyLoginRequest) (string, *model.StaffMember, error)
+	DirectLogin(req model.InitiateLoginRequest) (string, *model.StaffMember, error)
 	BlacklistToken(tokenString string) error
 	IsTokenBlacklisted(tokenString string) (bool, error)
 }
@@ -119,6 +120,34 @@ func (s *staffService) VerifyLogin(req model.VerifyLoginRequest) (string, *model
 	token, err := s.generateToken(member)
 	if err != nil {
 		return "", nil, err
+	}
+
+	return token, member, nil
+}
+
+func (s *staffService) DirectLogin(req model.InitiateLoginRequest) (string, *model.StaffMember, error) {
+	email := strings.ToLower(strings.TrimSpace(req.Email))
+
+	// 1. Find staff member in DB
+	member, err := s.repo.FindByEmail(email)
+	if err != nil {
+		return "", nil, errors.New("invalid email or password")
+	}
+
+	if !member.IsActive {
+		return "", nil, errors.New("your staff account is deactivated. Contact admin.")
+	}
+
+	// 2. Validate password
+	err = bcrypt.CompareHashAndPassword([]byte(member.Password), []byte(req.Password))
+	if err != nil {
+		return "", nil, errors.New("invalid email or password")
+	}
+
+	// 3. Generate signed JWT token
+	token, err := s.generateToken(member)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to generate token: %v", err)
 	}
 
 	return token, member, nil

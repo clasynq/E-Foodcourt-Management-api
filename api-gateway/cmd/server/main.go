@@ -14,10 +14,10 @@ import (
 )
 
 func main() {
-	// Load environment configurations
-	_ = godotenv.Load(".env")
-	_ = godotenv.Load("../.env")
-	_ = godotenv.Load("../../.env")
+	// Load environment configurations (forcing override of global vars)
+	_ = godotenv.Overload(".env")
+	_ = godotenv.Overload("../.env")
+	_ = godotenv.Overload("../../.env")
 
 	// Ensure secret key is loaded
 	if os.Getenv("SECRECT_KEY") == "" {
@@ -54,6 +54,14 @@ func main() {
 	if userDashboardServiceURL == "" {
 		userDashboardServiceURL = "http://localhost:8088"
 	}
+	staffLoginServiceURL := os.Getenv("STAFF_LOGIN_SERVICE_URL")
+	if staffLoginServiceURL == "" {
+		staffLoginServiceURL = "http://localhost:8086"
+	}
+	managerDashboardServiceURL := os.Getenv("MANAGER_DASHBOARD_SERVICE_URL")
+	if managerDashboardServiceURL == "" {
+		managerDashboardServiceURL = "http://localhost:8087"
+	}
 
 	log.Printf("[Gateway Config] User Auth Service -> %s", userServiceURL)
 	log.Printf("[Gateway Config] Wallet Service -> %s", walletServiceURL)
@@ -61,6 +69,8 @@ func main() {
 	log.Printf("[Gateway Config] Order/Kitchen Service -> %s", orderKitchenServiceURL)
 	log.Printf("[Gateway Config] AI/Analytics Service -> %s", aiAnalyticsServiceURL)
 	log.Printf("[Gateway Config] User Dashboard Service -> %s", userDashboardServiceURL)
+	log.Printf("[Gateway Config] Staff Login Service -> %s", staffLoginServiceURL)
+	log.Printf("[Gateway Config] Manager Dashboard Service -> %s", managerDashboardServiceURL)
 
 	r := gin.Default()
 
@@ -88,6 +98,12 @@ func main() {
 			targetURL = orderKitchenServiceURL
 		case strings.HasPrefix(path, "/api/analytics"):
 			targetURL = aiAnalyticsServiceURL
+		case strings.HasPrefix(path, "/api/staff"):
+			targetURL = staffLoginServiceURL
+		case strings.HasPrefix(path, "/api/manager/orders") || strings.HasPrefix(path, "/api/manager/menu") || strings.HasPrefix(path, "/api/manager/categories") || strings.HasPrefix(path, "/api/manager/uploads"):
+			targetURL = orderKitchenServiceURL
+		case strings.HasPrefix(path, "/api/manager"):
+			targetURL = managerDashboardServiceURL
 		default:
 			c.JSON(http.StatusNotFound, gin.H{
 				"error":   "Not Found",

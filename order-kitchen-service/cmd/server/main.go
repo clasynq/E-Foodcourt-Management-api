@@ -15,10 +15,10 @@ import (
 )
 
 func main() {
-	// Load environment configurations from multiple parent path offsets to support run directory variations
-	_ = godotenv.Load(".env")
-	_ = godotenv.Load("../.env")
-	_ = godotenv.Load("../../.env")
+	// Load environment configurations (forcing override of global vars)
+	_ = godotenv.Overload(".env")
+	_ = godotenv.Overload("../.env")
+	_ = godotenv.Overload("../../.env")
 
 	// Initialize Postgres and Redis database connection clients
 	config.InitDB()
@@ -49,6 +49,9 @@ func main() {
 		}
 		c.Next()
 	})
+
+	// Serve uploads folder statically
+	r.Static("/api/manager/uploads", "./uploads")
 
 	// Map API endpoint endpoints router tree structure
 	api := r.Group("/api")

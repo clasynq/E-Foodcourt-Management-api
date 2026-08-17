@@ -188,6 +188,48 @@ func (s *WalletService) DeductBalance(req model.DeductBalanceRequest) error {
 	return s.repo.UpdateStudentBalance(student.StudentID, newBalance)
 }
 
+func (s *WalletService) ProcessOnlineRecharge(studentID string, amount float64, paymentID string, paymentMethod string) (*model.StudentWalletAccount, *model.RechargeRecord, error) {
+	student, err := s.repo.GetStudentByIdOrEmail(studentID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("student wallet account not found for ID/Email: %s", studentID)
+	}
+
+	prevBalance := student.Balance
+	newBalance := prevBalance + amount
+
+	err = s.repo.UpdateStudentBalance(student.StudentID, newBalance)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	student.Balance = newBalance
+
+	record := model.RechargeRecord{
+		ID:              paymentID, // Razorpay payment ID as unique key for idempotency
+		StudentID:       student.StudentID,
+		StudentName:     student.Name,
+		StudentEmail:    student.Email,
+		RFIDCardID:      student.RFIDCardID,
+		Amount:          amount,
+		Method:          "online",
+		PaymentType:     paymentMethod,
+		PreviousBalance: prevBalance,
+		NewBalance:      newBalance,
+		Timestamp:       time.Now(),
+		RechargedBy:     "Razorpay Webhook",
+		Status:          "success",
+	}
+
+	err = s.repo.CreateRechargeRecord(&record)
+	if err != nil {
+		// Attempt to rollback balance update if record logging fails (e.g. duplicate webhook payload)
+		_ = s.repo.UpdateStudentBalance(student.StudentID, prevBalance)
+		return nil, nil, fmt.Errorf("failed to save payment recharge record (duplicate or DB error): %v", err)
+	}
+
+	return student, &record, nil
+}
+
 func urlEncode(str string) string {
 	return strings.ReplaceAll(str, " ", "+")
 }

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log"
 	"net/http"
 	"user-dashboard/internal/model"
 	"user-dashboard/internal/service"
@@ -18,6 +19,9 @@ func NewDashboardHandler(srv *service.DashboardService) *DashboardHandler {
 
 // GetOverview outputs dashboard statistics card and recent orders list
 func (h *DashboardHandler) GetOverview(c *gin.Context) {
+	log.Printf("[Dashboard Debug] Headers: X-User-Id='%s', X-User-Name='%s', X-User-Email='%s'", 
+		c.GetHeader("X-User-Id"), c.GetHeader("X-User-Name"), c.GetHeader("X-User-Email"))
+
 	userID := c.Query("userId")
 	if userID == "" {
 		userID = c.GetHeader("X-User-Id")
@@ -28,6 +32,11 @@ func (h *DashboardHandler) GetOverview(c *gin.Context) {
 		customerName = c.GetHeader("X-User-Name")
 	}
 
+	userEmail := c.Query("email")
+	if userEmail == "" {
+		userEmail = c.GetHeader("X-User-Email")
+	}
+
 	// Fallback values for test environments
 	if userID == "" {
 		userID = "user-default-stu-001"
@@ -35,9 +44,12 @@ func (h *DashboardHandler) GetOverview(c *gin.Context) {
 	if customerName == "" {
 		customerName = "Arindam Roy"
 	}
+	if userEmail == "" {
+		userEmail = "arindam@dinesynq.com"
+	}
 
 	ctx := c.Request.Context()
-	resp, err := h.srv.GetOverview(ctx, userID, customerName)
+	resp, err := h.srv.GetOverview(ctx, userID, customerName, userEmail)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "Failed to load student dashboard overview",

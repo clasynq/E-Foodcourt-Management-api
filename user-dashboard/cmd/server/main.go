@@ -15,9 +15,9 @@ import (
 
 func main() {
 	// Load environment config
-	_ = godotenv.Load(".env")
-	_ = godotenv.Load("../.env")
-	_ = godotenv.Load("../../.env")
+	_ = godotenv.Overload(".env")
+	_ = godotenv.Overload("../.env")
+	_ = godotenv.Overload("../../.env")
 
 	// Initialize database and cache connections
 	config.InitDB()

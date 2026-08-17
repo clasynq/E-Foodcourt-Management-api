@@ -83,3 +83,29 @@ func (h *StaffHandler) Logout(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "Staff logout successful"})
 }
+
+func (h *StaffHandler) Login(c *gin.Context) {
+	var req model.InitiateLoginRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	token, member, err := h.svc.DirectLogin(req)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Staff login successful",
+		"token":   token,
+		"user": gin.H{
+			"id":        member.ID,
+			"name":      member.Name,
+			"email":     member.Email,
+			"role":      member.Role,
+			"is_active": member.IsActive,
+		},
+	})
+}

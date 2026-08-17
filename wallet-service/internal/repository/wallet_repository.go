@@ -48,6 +48,21 @@ func (r *WalletRepository) GetStudentByIdOrEmail(query string) (*model.StudentWa
 	q := strings.ToLower(strings.TrimSpace(query))
 	err := r.db.Where("LOWER(student_id) = ? OR LOWER(email) = ? OR LOWER(name) LIKE ?", q, q, "%"+q+"%").First(&student).Error
 	if err != nil {
+		if err == gorm.ErrRecordNotFound && strings.Contains(q, "@") {
+			// Auto-create wallet account with default starter balance for presentation flow
+			prefix := strings.Split(q, "@")[0]
+			student = model.StudentWalletAccount{
+				StudentID:  "STU-" + strings.ToUpper(prefix),
+				Name:       strings.Title(strings.ReplaceAll(prefix, ".", " ")),
+				Email:      q,
+				RFIDCardID: "RFID-" + strings.ToUpper(prefix),
+				Balance:    0.00, // Default 0.00 balance
+				UpdatedAt:  time.Now(),
+			}
+			if createErr := r.db.Create(&student).Error; createErr == nil {
+				return &student, nil
+			}
+		}
 		return nil, err
 	}
 	return &student, nil

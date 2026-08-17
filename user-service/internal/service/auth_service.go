@@ -68,6 +68,19 @@ func NewAuthService(repo repository.UserRepository, rdb *redis.Client) AuthServi
 
 // Register hashes password, sanitizes inputs, creates a user record, and caches in Redis.
 func (s *authService) Register(req model.SignupRequest) (*model.User, error) {
+	email := strings.ToLower(strings.TrimSpace(req.Email))
+
+	// Verify email has been pre-verified via OTP in Redis
+	ctx := context.Background()
+	verifiedKey := "email:verified:" + email
+	exists, err := s.rdb.Exists(ctx, verifiedKey).Result()
+	if err != nil || exists == 0 {
+		return nil, errors.New("email verification required (OTP expired or not completed)")
+	}
+
+	// Delete verification token immediately upon use (prevent replay/hijacking)
+	s.rdb.Del(ctx, verifiedKey)
+
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, err
@@ -264,6 +277,7 @@ func (s *authService) SendOTP(email string) error {
 
 	// Dispatch the OTP asynchronously in a background goroutine (Instant response!)
 	go func(recipient, code string) {
+		log.Printf("Generated OTP for %s: %s", recipient, code)
 		if err := utils.SendOTPEmail(recipient, code); err != nil {
 			log.Printf("Error: Failed to deliver background OTP email to %s: %v", recipient, err)
 		} else {
@@ -291,9 +305,15 @@ func (s *authService) VerifyOTP(email string, otp string) (bool, error) {
 		return false, errors.New("Invalid OTP code")
 	}
 
-	// Deleted OTP key from Redis upon successfully veriication so it cannot be reused
-
+	// Deleted OTP key from Redis upon successfully verification so it cannot be reused
 	s.rdb.Del(ctx, key)
+
+	// Set verification key in Redis (expires in 10 minutes)
+	verifiedKey := "email:verified:" + email
+	if err := s.rdb.Set(ctx, verifiedKey, "true", 10*time.Minute).Err(); err != nil {
+		return false, fmt.Errorf("failed to cache verification state: %v", err)
+	}
+
 	return true, nil
 }
 

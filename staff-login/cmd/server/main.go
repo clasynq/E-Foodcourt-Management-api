@@ -14,8 +14,8 @@ import (
 )
 
 func main() {
-	// 1. Load local environment configuration if available
-	if err := godotenv.Load(); err != nil {
+	// 1. Load local environment configuration if available (forcing override of global vars)
+	if err := godotenv.Overload(); err != nil {
 		log.Println("Info: No local .env file found. Reading system environment variables.")
 	}
 
@@ -41,6 +41,7 @@ func main() {
 	{
 		staffRoutes.POST("/login/initiate", staffHandler.InitiateLogin)
 		staffRoutes.POST("/login/verify", staffHandler.VerifyLogin)
+		staffRoutes.POST("/login", staffHandler.Login)
 		staffRoutes.POST("/logout", staffHandler.Logout)
 	}
 

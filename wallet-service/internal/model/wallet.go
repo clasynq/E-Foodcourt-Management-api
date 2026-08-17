@@ -50,8 +50,49 @@ type ManualRechargeRequest struct {
 	RechargedBy string  `json:"rechargedBy"`
 }
 
+// OnlineRechargeRequest is the request payload for online Razorpay checkout recharges
+type OnlineRechargeRequest struct {
+	Email         string  `json:"email" binding:"required,email"`
+	Amount        float64 `json:"amount" binding:"required,gt=0"`
+	PaymentID     string  `json:"paymentId" binding:"required"`
+	PaymentMethod string  `json:"paymentMethod" binding:"required"`
+}
+
 // DeductBalanceRequest is the request payload for digital wallet deductions (e.g. order checkout)
 type DeductBalanceRequest struct {
 	Email  string  `json:"email" binding:"required,email"`
 	Amount float64 `json:"amount" binding:"required,gt=0"`
 }
+
+// RazorpayWebhookPayload represents the structure of Razorpay webhook request body.
+type RazorpayWebhookPayload struct {
+	Entity    string               `json:"entity"`
+	AccountID string               `json:"account_id"`
+	Event     string               `json:"event"`
+	Payload   RazorpayPayloadInner `json:"payload"`
+}
+
+type RazorpayPayloadInner struct {
+	Payment RazorpayPaymentContainer `json:"payment"`
+}
+
+type RazorpayPaymentContainer struct {
+	Entity RazorpayPaymentEntity `json:"entity"`
+}
+
+type RazorpayPaymentEntity struct {
+	ID        string        `json:"id"`
+	Amount    float64       `json:"amount"` // in paise (e.g., 50000 for INR 500.00)
+	Currency  string        `json:"currency"`
+	Status    string        `json:"status"`
+	Method    string        `json:"method"`
+	Email     string        `json:"email"`
+	Contact   string        `json:"contact"`
+	Notes     RazorpayNotes `json:"notes"`
+	CreatedAt int64         `json:"created_at"`
+}
+
+type RazorpayNotes struct {
+	StudentID string `json:"studentId"`
+}
+

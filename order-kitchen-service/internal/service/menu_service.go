@@ -2,7 +2,11 @@ package service
 
 import (
 	"context"
+	"encoding/base64"
+	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -70,13 +74,18 @@ func (s *MenuService) CreateFoodItem(ctx context.Context, req model.CreateFoodIt
 		platesCooked = *req.PlatesCooked
 	}
 
+	savedImage, err := saveBase64Image(req.Image)
+	if err != nil {
+		savedImage = req.Image
+	}
+
 	item := model.FoodItem{
 		ID:                foodID,
 		Name:              req.Name,
 		Description:       req.Description,
 		Price:             req.Price,
 		OriginalPrice:     req.OriginalPrice,
-		Image:             req.Image,
+		Image:             savedImage,
 		CategoryID:        req.CategoryID,
 		Type:              req.Type,
 		MealTime:          strings.Join(req.MealTime, ","),
@@ -120,12 +129,17 @@ func (s *MenuService) CreateFoodItem(ctx context.Context, req model.CreateFoodIt
 
 // UpdateFoodItem applies detail changes of an item in the database
 func (s *MenuService) UpdateFoodItem(ctx context.Context, id string, req model.CreateFoodItemRequest) (*model.FoodItemResponse, error) {
+	savedImage, err := saveBase64Image(req.Image)
+	if err != nil {
+		savedImage = req.Image
+	}
+
 	updates := map[string]interface{}{
 		"name":               req.Name,
 		"description":        req.Description,
 		"price":              req.Price,
 		"original_price":     req.OriginalPrice,
-		"image":              req.Image,
+		"image":              savedImage,
 		"category_id":        req.CategoryID,
 		"type":               req.Type,
 		"meal_time":          strings.Join(req.MealTime, ","),
@@ -275,4 +289,46 @@ func (s *MenuService) ListStudentFoodItems(ctx context.Context) ([]model.FoodIte
 		resp = append(resp, item.ToResponse(catName))
 	}
 	return resp, nil
+}
+
+func saveBase64Image(base64Str string) (string, error) {
+	if !strings.HasPrefix(base64Str, "data:image/") {
+		return base64Str, nil
+	}
+
+	parts := strings.Split(base64Str, ",")
+	if len(parts) != 2 {
+		return "", errors.New("invalid base64 image format")
+	}
+
+	header := parts[0]
+	body := parts[1]
+
+	ext := ".png"
+	if strings.Contains(header, "image/jpeg") || strings.Contains(header, "image/jpg") {
+		ext = ".jpg"
+	} else if strings.Contains(header, "image/gif") {
+		ext = ".gif"
+	} else if strings.Contains(header, "image/webp") {
+		ext = ".webp"
+	}
+
+	dec, err := base64.StdEncoding.DecodeString(body)
+	if err != nil {
+		return "", err
+	}
+
+	uploadDir := "./uploads"
+	if err := os.MkdirAll(uploadDir, os.ModePerm); err != nil {
+		return "", err
+	}
+
+	fileName := fmt.Sprintf("img-%d%s", time.Now().UnixNano(), ext)
+	filePath := filepath.Join(uploadDir, fileName)
+
+	if err := os.WriteFile(filePath, dec, 0644); err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("/api/manager/uploads/%s", fileName), nil
 }

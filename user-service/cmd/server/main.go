@@ -14,8 +14,8 @@ import (
 )
 
 func main() {
-	// 1. Load local environment configurations if available
-	if err := godotenv.Load(); err != nil {
+	// 1. Load local environment configurations if available (forcing override of global vars)
+	if err := godotenv.Overload(); err != nil {
 		log.Println("Info: No local .env file found. Reading system environment variables.")
 	}
 

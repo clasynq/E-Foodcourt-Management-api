@@ -27,10 +27,10 @@ func (r *userRepository) Create(user *model.User) error {
 	return r.db.Create(user).Error
 }
 
-// FindByEmail searches for a user in the database by their email address.
+// FindByEmail searches for a user in the database by their email address or username.
 func (r *userRepository) FindByEmail(email string) (*model.User, error) {
 	var user model.User
-	err := r.db.Where("email = ?", email).First(&user).Error
+	err := r.db.Where("email = ? OR username = ?", email, email).First(&user).Error
 	if err != nil {
 		return nil, err
 	}

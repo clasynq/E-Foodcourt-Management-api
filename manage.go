@@ -4,9 +4,12 @@ import (
 	"bufio"
 	"fmt"
 	"log"
+	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -34,13 +37,13 @@ var validServices = []string{
 
 func main() {
 	// Load root .env file if it exists
-	_ = godotenv.Load(".env")
-	_ = godotenv.Load("../.env")
+	_ = godotenv.Overload(".env")
+	_ = godotenv.Overload("../.env")
 
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
 		// Fallback check: try reading from user-service/.env which has the auth DB
-		if err := godotenv.Load("user-service/.env"); err == nil {
+		if err := godotenv.Overload("user-service/.env"); err == nil {
 			dbURL = os.Getenv("DB_DSN")
 		}
 	}
@@ -74,7 +77,7 @@ func main() {
 		runCreateAdmin(dbURL)
 	case "createstaff":
 		staffDbURL := ""
-		if err := godotenv.Load("staff-login/.env"); err == nil {
+		if err := godotenv.Overload("staff-login/.env"); err == nil {
 			staffDbURL = os.Getenv("DB_DSN")
 		}
 		if staffDbURL == "" {
@@ -85,6 +88,10 @@ func main() {
 		runUpdatePass(dbURL)
 	case "updateemail":
 		runUpdateEmail(dbURL)
+	case "stop":
+		runStopServices()
+	case "start", "run":
+		runStartServices()
 	case "help":
 		printHelp()
 	default:
@@ -107,6 +114,8 @@ func printHelp() {
 	fmt.Println("  createstaff                          Create a new staff member (MANAGER/CHEF/ADMIN) in staff table")
 	fmt.Println("  updatepass                           Update an admin password in the users table")
 	fmt.Println("  updateemail                          Update an admin email address in the users table")
+	fmt.Println("  start                                Start all microservices in separate console windows (aliased: run)")
+	fmt.Println("  stop                                 Stop all microservices by terminating port bindings")
 	fmt.Println("  help                                 Show this help screen")
 	fmt.Println("\nValid Services:")
 	for _, s := range validServices {
@@ -781,4 +790,151 @@ VALUES (
 			}
 		}
 	}
+}
+
+// ----------------------------------------------------
+// STOP COMMAND
+// ----------------------------------------------------
+func runStopServices() {
+	ports := []int{8080, 8081, 8082, 8084, 8086, 8087, 8088}
+	fmt.Println("\nStopping all Smart Food Court microservices...")
+
+	pidRegexp := regexp.MustCompile(`\s+(\d+)\s*$`)
+	terminatedCount := 0
+	killedPIDs := make(map[string]bool)
+
+	for _, port := range ports {
+		if runtime.GOOS == "windows" {
+			// Windows: Find PID on local port listening
+			cmd := exec.Command("cmd", "/c", fmt.Sprintf("netstat -ano | findstr LISTENING | findstr :%d", port))
+			output, err := cmd.Output()
+			if err != nil {
+				// No process running on this port, skip
+				continue
+			}
+
+			lines := strings.Split(string(output), "\n")
+			for _, line := range lines {
+				line = strings.TrimSpace(line)
+				if line == "" {
+					continue
+				}
+				matches := pidRegexp.FindStringSubmatch(line)
+				if len(matches) > 1 {
+					pid := matches[1]
+					if killedPIDs[pid] {
+						continue // Already killed in this loop
+					}
+
+					fmt.Printf("Port %d is occupied by PID %s. Terminating...\n", port, pid)
+					
+					// Force terminate process
+					killCmd := exec.Command("taskkill", "/F", "/PID", pid)
+					if err := killCmd.Run(); err != nil {
+						fmt.Printf("Failed to terminate process %s: %v\n", pid, err)
+					} else {
+						fmt.Printf("Successfully terminated process %s on port %d.\n", pid, port)
+						terminatedCount++
+						killedPIDs[pid] = true
+					}
+				}
+			}
+		} else {
+			// Unix-based systems (Linux/macOS)
+			cmd := exec.Command("lsof", "-t", fmt.Sprintf("-i:%d", port))
+			output, err := cmd.Output()
+			if err != nil {
+				continue
+			}
+			
+			pid := strings.TrimSpace(string(output))
+			if pid != "" {
+				if killedPIDs[pid] {
+					continue
+				}
+
+				fmt.Printf("Port %d is occupied by PID %s. Terminating...\n", port, pid)
+				killCmd := exec.Command("kill", "-9", pid)
+				if err := killCmd.Run(); err != nil {
+					fmt.Printf("Failed to terminate process %s: %v\n", pid, err)
+				} else {
+					fmt.Printf("Successfully terminated process %s on port %d.\n", pid, port)
+					terminatedCount++
+					killedPIDs[pid] = true
+				}
+			}
+		}
+	}
+
+	if terminatedCount == 0 {
+		fmt.Println("No active services detected on port ranges.")
+	} else {
+		fmt.Printf("Success: Terminated %d microservice process(es).\n", terminatedCount)
+	}
+}
+
+// ----------------------------------------------------
+// START/RUN COMMAND
+// ----------------------------------------------------
+func runStartServices() {
+	services := []struct {
+		Name string
+		Port int
+		Path string
+	}{
+		{Name: "api-gateway", Port: 8080, Path: "api-gateway"},
+		{Name: "user-service", Port: 8081, Path: "user-service"},
+		{Name: "wallet-service", Port: 8082, Path: "wallet-service"},
+		{Name: "order-kitchen-service", Port: 8084, Path: "order-kitchen-service"},
+		{Name: "staff-login", Port: 8086, Path: "staff-login"},
+		{Name: "manager-dashboard", Port: 8087, Path: "manager-dashboard"},
+		{Name: "user-dashboard", Port: 8088, Path: "user-dashboard"},
+	}
+
+	fmt.Println("\nChecking ports and launching microservices...")
+	cwd, err := os.Getwd()
+	if err != nil {
+		log.Fatalf("Failed to get current working directory: %v", err)
+	}
+
+	for _, svc := range services {
+		// Check if port is already active
+		if isPortInUse(svc.Port) {
+			fmt.Printf("[-] Service '%s' is already running on port %d.\n", svc.Name, svc.Port)
+			continue
+		}
+
+		fmt.Printf("[+] Launching '%s' on port %d in a new terminal window...\n", svc.Name, svc.Port)
+		absPath := filepath.Join(cwd, svc.Path)
+
+		if runtime.GOOS == "windows" {
+			// Windows: Spawn in a new PowerShell console window, clearing inherited PORT variable
+			psCmd := fmt.Sprintf("Start-Process powershell -ArgumentList '-NoExit', '-Command', '$Host.UI.RawUI.WindowTitle = ''%s''; $env:PORT=$null; go run ./cmd/server/main.go' -WorkingDirectory '%s'", svc.Name, absPath)
+			execCmd := exec.Command("powershell", "-Command", psCmd)
+			if err := execCmd.Run(); err != nil {
+				fmt.Printf("Failed to launch service '%s': %v\n", svc.Name, err)
+			}
+		} else {
+			// Unix-based systems: Run in background and redirect logs to log file, clearing inherited PORT variable
+			logFile := filepath.Join(absPath, svc.Name+".log")
+			shellCmd := fmt.Sprintf("cd '%s' && unset PORT && go run ./cmd/server/main.go > '%s' 2>&1 &", absPath, logFile)
+			execCmd := exec.Command("sh", "-c", shellCmd)
+			if err := execCmd.Run(); err != nil {
+				fmt.Printf("Failed to launch service '%s': %v\n", svc.Name, err)
+			} else {
+				fmt.Printf("Launched '%s' in background. Logs redirected to: %s\n", svc.Name, logFile)
+			}
+		}
+	}
+	fmt.Println("All launches triggered successfully!")
+}
+
+// Helper: Checks if a local port is in use using standard TCP listeners
+func isPortInUse(port int) bool {
+	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
+	if err != nil {
+		return true
+	}
+	ln.Close()
+	return false
 }

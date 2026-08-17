@@ -24,9 +24,9 @@ func NewDashboardService(repo *repository.DashboardRepository, rdb *redis.Client
 }
 
 // GetOverview compiles wallet, order, analytics, and rewards metrics for the student.
-func (s *DashboardService) GetOverview(ctx context.Context, userID string, customerName string) (*model.DashboardOverviewResponse, error) {
+func (s *DashboardService) GetOverview(ctx context.Context, userID string, customerName string, userEmail string) (*model.DashboardOverviewResponse, error) {
 	// 1. Fetch wallet balance from wallet-service (fall back to standard balance or mock if service is down)
-	balanceStr := s.fetchWalletBalance(userID)
+	balanceStr := s.fetchWalletBalance(userEmail)
 
 	// 2. Fetch orders from order-kitchen-service
 	orders, err := s.fetchStudentOrders(customerName)
@@ -54,12 +54,6 @@ func (s *DashboardService) GetOverview(ctx context.Context, userID string, custo
 	reward, err := s.repo.GetRewards(userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch rewards: %v", err)
-	}
-
-	// Baseline seed rewards points if brand new user
-	if reward.Points == 0 {
-		reward.Points = 1250 // Starter rewards points to fit premium look
-		_ = s.repo.AddRewards(userID, 1250)
 	}
 
 	// 4. Avg Wait Time (calculated dynamically or fetched from AI analytics service)
@@ -114,9 +108,9 @@ type orderKitchenOrder struct {
 	CreatedAt    time.Time `json:"createdAt"`
 }
 
-func (s *DashboardService) fetchWalletBalance(userID string) string {
+func (s *DashboardService) fetchWalletBalance(email string) string {
 	client := &http.Client{Timeout: 1 * time.Second}
-	resp, err := client.Get(fmt.Sprintf("http://localhost:8082/api/wallet/balance?userId=%s", userID))
+	resp, err := client.Get(fmt.Sprintf("http://localhost:8082/api/wallet/balance?email=%s", email))
 	if err == nil && resp.StatusCode == http.StatusOK {
 		var result struct {
 			Balance float64 `json:"balance"`
@@ -170,7 +164,7 @@ func (s *DashboardService) fetchAvgWaitTime(userID string, orders []orderKitchen
 	if len(orders) > 0 {
 		return "8 min"
 	}
-	return "8 min"
+	return "0 min"
 }
 
 func (s *DashboardService) getMockRecentOrders() []orderKitchenOrder {

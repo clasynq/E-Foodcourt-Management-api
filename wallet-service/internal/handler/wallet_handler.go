@@ -1,7 +1,14 @@
 package handler
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"io"
+	"log"
 	"net/http"
+	"os"
 	"wallet-service/internal/model"
 	"wallet-service/internal/service"
 
@@ -9,11 +16,16 @@ import (
 )
 
 type WalletHandler struct {
-	srv *service.WalletService
+	srv           *service.WalletService
+	webhookSecret string
 }
 
 func NewWalletHandler(srv *service.WalletService) *WalletHandler {
-	return &WalletHandler{srv: srv}
+	secret := os.Getenv("RAZORPAY_WEBHOOK_SECRET")
+	if secret == "" {
+		log.Fatal("RAZORPAY_WEBHOOK_SECRET must be set")
+	}
+	return &WalletHandler{srv: srv, webhookSecret: secret}
 }
 
 // GetBalance returns the float64 balance for a given userId (student ID) or email
@@ -156,4 +168,94 @@ func (h *WalletHandler) GetSummary(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, summary)
+}
+
+// RazorpayWebhook handles incoming payment capture notifications from Razorpay
+func (h *WalletHandler) RazorpayWebhook(c *gin.Context) {
+	bodyBytes, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to read request body"})
+		return
+	}
+
+	// 1. Read signature header
+	sigHeader := c.GetHeader("X-Razorpay-Signature")
+
+	// 2. Validate signature using stored webhookSecret
+	mac := hmac.New(sha256.New, []byte(h.webhookSecret))
+	mac.Write(bodyBytes)
+	expectedSig := hex.EncodeToString(mac.Sum(nil))
+	if !hmac.Equal([]byte(expectedSig), []byte(sigHeader)) {
+		log.Printf("[Error] Webhook signature verification failed. Expected: %s, Received: %s", expectedSig, sigHeader)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid webhook signature"})
+		return
+	}
+
+	// 3. Parse JSON payload
+	var payload model.RazorpayWebhookPayload
+	if err := json.Unmarshal(bodyBytes, &payload); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid JSON payload"})
+		return
+	}
+
+	// 4. Process only payment.captured event
+	if payload.Event == "payment.captured" {
+		payment := payload.Payload.Payment.Entity
+		studentID := payment.Notes.StudentID
+		if studentID == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Student ID missing from payment notes"})
+			return
+		}
+
+		// Amount is in paise, convert to INR
+		amountINR := payment.Amount / 100.0
+
+		// Update wallet balance via service layer
+		student, record, err := h.srv.ProcessOnlineRecharge(studentID, amountINR, payment.ID, payment.Method)
+		if err != nil {
+			log.Printf("[Error] Failed to process online recharge: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		log.Printf("[Success] Online recharge processed for Student: %s, Amount: ₹%.2f, PaymentID: %s", studentID, amountINR, payment.ID)
+		c.JSON(http.StatusOK, gin.H{
+			"success":        true,
+			"message":        "Payment captured and wallet credited successfully",
+			"paymentId":      payment.ID,
+			"studentId":      studentID,
+			"amount":         amountINR,
+			"record":         record,
+			"updatedStudent": student,
+		})
+		return
+	}
+
+	// Handle other events gracefully (ignore them but return 200 OK)
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Webhook received but not processed (ignored event: " + payload.Event + ")",
+	})
+}
+
+// OnlineRecharge handles direct Razorpay/online payment captures from the authenticated client
+func (h *WalletHandler) OnlineRecharge(c *gin.Context) {
+	var req model.OnlineRechargeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	student, record, err := h.srv.ProcessOnlineRecharge(req.Email, req.Amount, req.PaymentID, req.PaymentMethod)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":        true,
+		"message":        "Wallet recharged successfully via Razorpay!",
+		"record":         record,
+		"updatedStudent": student,
+	})
 }

@@ -16,9 +16,9 @@ import (
 
 func main() {
 	// Load environment config
-	_ = godotenv.Load(".env")
-	_ = godotenv.Load("../.env")
-	_ = godotenv.Load("../../.env")
+	_ = godotenv.Overload(".env")
+	_ = godotenv.Overload("../.env")
+	_ = godotenv.Overload("../../.env")
 
 	config.InitDB()
 	config.InitRedis()
